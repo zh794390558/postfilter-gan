@@ -5,17 +5,17 @@ metadata:
 spec:
   containers:
   - args:
-    - echo 'hello';sleep 20
+    - echo 'hello';sleep 2d
     command:
     - /bin/bash
     - -c
-    image: bootstrapper:5000/zhanghui/tensorflow-cpu
+    image: harbor.ail.unisound.com/zhanghui/tensorflow-cpu-1.2.1:latest 
     imagePullPolicy: IfNotPresent
     name: demo
     volumeMounts:
     - mountPath: /gfs
       name: nfs0
-    - mountPath: ' /tmp'
+    - mountPath: '/tmp'
       name: hostpath1
   dnsPolicy: ClusterFirst
   restartPolicy: Never
