@@ -2,6 +2,6 @@
 
 set -x 
 
-docker build -f docker/Dockerfile -t bootstrapper:5000/zhanghui/tensorflow-cpu docker 
+docker build --force-rm=fasle --no-cache=false -f docker/Dockerfile -t harbor.ail.unisound.com/zhanghui/tensorflow-cpu-1.2.1 docker 
 
-docker push bootstrapper:5000/zhanghui/tensorflow-cpu
+docker push harbor.ail.unisound.com/zhanghui/tensorflow-cpu-1.2.1 
