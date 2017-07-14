@@ -1,26 +1,11 @@
 import logging
 from ops import * 
-from util import model_property
+from utils import model_property
+from base import Tower
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s',
 		    datefmt='%Y-%m-%d %H:%M:%S',
 	            level=logging.INFO)
-
-class Tower(object):
-	def __init__(self, x, y, input_shape, nclasses, is_training, is_inference):
-		self.input_shape = input_shape
-		self.nclasses = nclasses
-		self.is_trainning = is_training
-		self.is_inference = is_inference
-		self.summaries = []
-		self.x = x
-		self.y = y
-		self.train = None
-
-
-	def gradientUpdate(self, grad):
-		return grad
-
 
 class UserModel(Tower):
 	"""
