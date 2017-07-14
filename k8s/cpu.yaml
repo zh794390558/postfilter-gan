@@ -1,17 +1,17 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: demo
+  name: gan
 spec:
   containers:
   - args:
-    - echo 'hello';sleep 2d
+    - echo 'hello';sleep 20d; true
     command:
     - /bin/bash
     - -c
     image: harbor.ail.unisound.com/zhanghui/tensorflow-cpu-1.2.1:latest 
     imagePullPolicy: IfNotPresent
-    name: demo
+    name: gan 
     volumeMounts:
     - mountPath: /gfs
       name: nfs0
