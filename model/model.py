@@ -54,8 +54,10 @@ class UserModel(Tower):
 		"""
 		Loss function
 		Returns either an op or a list of dicts.
+
 		If the returned value is an op then DIGITS will optimize against this op
 		with respect to all trainable variables.
+
 		If the returned value is a list then DIGITS will optimize against each
 		loss in the list with respect to the specified variables.
 		"""
