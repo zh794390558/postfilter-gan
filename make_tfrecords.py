@@ -8,7 +8,6 @@ from six.moves import xrange
 
 import tensorflow as tf
 import numpy as np
-import librosa
 from  pprint import pprint
 import argparse
 import toml
@@ -200,7 +199,7 @@ def main(opts):
 			gen_dir = dset_val['gen']
 			nature_dir = dset_val['nature']
 			files = [(os.path.join(gen_dir, wav) ,  os.path.join(nature_dir, os.path.splitext(wav)[0] + '.cep'))
-				  for wav in os.listdir(gen_dir)[:30] if wav.endswith('.mcep')]
+				  for wav in os.listdir(gen_dir)[:opts.examples] if wav.endswith('.mcep')]
 
 			pprint(files[:1])
 			nfiles = len(files)
@@ -235,8 +234,11 @@ if __name__ == '__main__':
 			    help='Frames length')
 	parser.add_argument('--feature_size', type=int, default=41,
 			    help='feature length')
+	parser.add_argument('--examples', type=int, default=None,
+			    help='convert *examples* examples, for debug')
 
 	opts = parser.parse_args()
 	pprint(opts)
 
 	main(opts)
+
