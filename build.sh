@@ -8,4 +8,5 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
+docker rmi harbor.ail.unisound.com/zhanghui/tensorflow-cpu-1.2.1:latest
 docker push harbor.ail.unisound.com/zhanghui/tensorflow-cpu-1.2.1 
