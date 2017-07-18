@@ -152,13 +152,13 @@ def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=
             return tf.matmul(input_, matrix) + bias
 
 def nhwc_to_nchw(x):
-	return tf.transpose(x, [0, 3, 1, 2])
+        return tf.transpose(x, [0, 3, 1, 2])
 
 def nchw_to_nhwc(x):
-	return tf.transpose(x, [0, 2, 3, 1])
+        return tf.transpose(x, [0, 2, 3, 1])
 
 def chw_to_hwc(x):
-	return tf.transpose(x, [1, 2, 0])
+        return tf.transpose(x, [1, 2, 0])
 
 def hwc_to_chw(x):
-	return tf.transpose(x, [2, 0, 1])
+        return tf.transpose(x, [2, 0, 1])
