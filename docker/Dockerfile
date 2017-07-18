@@ -7,12 +7,14 @@ RUN groupadd -f -g 800  zhanghui && \
     useradd -m -u 800 -g 800 -G 800,1022,1023 -d /home/zhanghui -m -s /bin/bash zhanghui &&\
     chown -R zhanghui:zhanghui /home/zhanghui && \
     apt-get update && \
-    apt-get install -y  --no-install-recommends \
-		vim git tig && \
+    apt-get install -y  --no-install-recommends --allow-remove-essential \
+	vim git bash-completion tig tree ctags && \
     apt-get clean &&\
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    git clone --depth=1 https://github.com/amix/vimrc.git /home/zhanghui/.vim_runtime && \
+    sed -i '$a sh ~/.vim_runtime/install_awesome_vimrc.sh' /home/zhanghui/.profile
+    
 
 USER zhanghui
 WORKDIR  /home/zhanghui
-
 

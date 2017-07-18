@@ -1,7 +1,9 @@
 from __future__ import absolute_import
 from __future__ import division
-from __future__ import print_function 
+from __future__ import print_function
 
+import datetime
+import inspect
 import logging
 import math
 import numpy as np
@@ -35,7 +37,7 @@ tf.app.flags.DEFINE_string('inference_db', '', """Directory with inference file 
 tf.app.flags.DEFINE_integer(
     'validation_interval', 1, """Number of train epochs to complete, to perform one validation""")
 tf.app.flags.DEFINE_string('labels_list', '', """Text file listing label definitions""")
-tf.app.flags.DEFINE_float('momentum', '0.9', """Momentum""") 
+tf.app.flags.DEFINE_float('momentum', '0.9', """Momentum""")
 tf.app.flags.DEFINE_string('network', '', """File containing network (model)""")
 tf.app.flags.DEFINE_string('networkDirectory', '', """Directory in which network exists""")
 tf.app.flags.DEFINE_string('optimization', 'sgd', """Optimization method""")
@@ -88,7 +90,7 @@ tf.app.flags.DEFINE_integer(
 
 
 def load_snapshot(sess, weight_path, var_candidates):
- 	""" 
+ 	"""
 	Loads a snapshot into a session from a weight path. Will only load the
 	weights that are both in the weight_path file and the passed var_candidates.
 	"""
@@ -111,7 +113,7 @@ def load_snapshot(sess, weight_path, var_candidates):
 	tf.train.Saver(vars_restore, max_to_keep=0, shared=FLAGS.serving_export).restore(sess, weight_path)
 	logging.info('Variables restored.')
 
- 
+
 def loadLabels(filename):
     with open(filename) as f:
         return f.readlines()
@@ -120,12 +122,12 @@ def main(_):
 	# Always keep the cpu as default
 	with tf.Graph().as_default(), tf.device('/cpu:0'):
 		if FLAGS.validation_interval == 0:
-			FLAGS.validation_db = None	
+			FLAGS.validation_db = None
 
 		# Set Tensorboard log directory
 		if FLAGS.summaries_dir:
 			# The following gives a nice but unrobust timestamp
-			FLAGS.summaries_dir = os.path(FLAGS.summries_dir, datetime.datetime.now().strftime('%Y%m%d_%H$M$S'))
+			FLAGS.summaries_dir = os.path.join(FLAGS.summaries_dir, datetime.datetime.now().strftime('%Y%m%d_%H$M$S'))
 
 		if not FLAGS.train_db and not FLAGS.validation_db and not FLAGS.inference_db:
 			logging.error("At least one of the following file sources should be specified: "
@@ -147,7 +149,7 @@ def main(_):
 		next_snapshot_save = FLAGS.snapshotInterval
 		logging.info("Training epochs to be completed before taking a snapshot : %s", next_snapshot_save)
 		last_snapshot_save_epoch = 0
-	
+
 		snapshot_prefix = FLAGS.snapshotPrefix if FLAGS.snapshotPrefix else FLAGS.network.split('.')[0]
 		logging.info('Model weights will be saves as {}_<EPOCH>_Model.ckpt'.format(snapshot_prefix))
 
@@ -166,7 +168,7 @@ def main(_):
 			exit(-1)
 		    logging.info("Found %s classes", nclasses)
 
-	
+
 		# Import the network file
 		path_network = os.path.join(os.path.dirname(os.path.realpath(__file__)), FLAGS.networkDirectory, FLAGS.network)
 		exec(open(path_network).read(), globals())
@@ -190,7 +192,7 @@ def main(_):
 							     batch_size_train,
 							     FLAGS.epoch,
 							     FLAGS.seed)
-		
+
 				train_model.create_model(UserModel, stage_scope)
 
 		if FLAGS.validation_db:
@@ -281,16 +283,16 @@ def main(_):
 			tmp_batchsize = tmp_batchsize * 10
 			epoch_round += 1
 		logging.info("While logging, epoch value will be rounded to %s significant digits", epoch_round)
-		
+
 	 	# Create the learning rate policy
-		toatl_training_steps = train_model.dataload.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size	
+		toatl_training_steps = train_model.dataload.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size
 
 		lrpolicy  = lr_policy.LRPolicy(FALGS.lr_policy,
-						FALGS.lr_base_rate,	
-						FALGS.lr_gamma,	
-						FALGS.lr_power,	
+						FALGS.lr_base_rate,
+						FALGS.lr_gamma,
+						FALGS.lr_power,
 						total_trainning_steps,
-						FALGS.lr_stepvalues)	
+						FALGS.lr_stepvalues)
 		train_model.start_queue_runners(sess)
 
 		# Trainnig
@@ -320,7 +322,7 @@ def main(_):
 								train_model.global_step],
 								feed_dict=feed_dict,
 								options=run_options,
-								run_metadata=run_metadata)		
+								run_metadata=run_metadata)
 
 				step = step / len(train_model.train)
 
@@ -330,14 +332,14 @@ def main(_):
 
 				writer.add_summary(summary_str, step)
 
-				current_epoch = round((step * batch_size_train) / train_model.dataloader.get_total(), epoch_round)	
+				current_epoch = round((step * batch_size_train) / train_model.dataloader.get_total(), epoch_round)
 
 				# Potential Validation Pass
 				if FLAGS.validation_db and current_epoch >= next_validation:
 					Validation(sess, val_model, current_epoch)
 					# Find next nearest epoch value that exactly divisible by FLAGS.validation_interval:
 					next_validation = (round(float(current_epoch)/FLAGS.validation_interval) + 1) * \
-							    FLAGS.validation_interval	
+							    FLAGS.validation_interval
 
 				 # Saving Snapshot
 				if FLAGS.snapshotInterval > 0 and current_epoch >= next_snapshot_save:
@@ -356,12 +358,12 @@ def main(_):
 		except (KeyboardInterrupt):
 			logging.info('Interrupt signal received.')
 
-	
+
 			# If required, perform final snapshot save
 			if FLAGS.snapshotInterval > 0 and FLAGS.epoch > last_snapshot_save_epoch:
 				save_snapshot(sess, saver, FLAGS.save, snapshot_prefix, FLAGS.epoch, FLAGS.serving_export)
 
-		print('Training wall-time:', time.time()-start) 
+		print('Training wall-time:', time.time()-start)
 
 		# If required, perform final Validation pass
 		if FLAGS.validation_db and current_epoch >= next_validation:

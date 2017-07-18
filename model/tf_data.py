@@ -166,7 +166,7 @@ class LoaderFactory(object):
 					data = digits.bgr_to_rgb(data)
 
 			# Convert to float
-			data = tf.to_float(data)
+			# data = tf.to_float(data)
 			# data = tf.image.convert_image_dtype(data, tf.float32) # normalize to [0:1) range
 		return data
 
@@ -202,8 +202,12 @@ class LoaderFactory(object):
 		if self.labels_db_path:  # Using a seperate label db; label can be anything
 			single_label_shape = tf.reshape(single_label_shape, [3])  # Shape the shape
 			single_label = self.labels_db.reshape_decode(single_label, single_label_shape)
-		elif single_label is not None:  # Not using a seperate label db; label is a scalar
-			 single_label = tf.reshape(single_label, [])
+		elif single_label is not None:  # Not using a seperate label db; label is scalar #
+			# single_label = tf.reshape(single_label, [])
+
+			# using as conditon of DCGAN, which shape is same to data
+			single_label_shape = tf.reshape(single_label_shape, [3])
+			single_label = tf.reshape_decode(single_label, single_label_shape)
 
 		# Mean Subtraction
 
@@ -220,9 +224,8 @@ class LoaderFactory(object):
 		# Data Augmentation
 
 
-
-		max_queue_capacity = min(math.ceil(self.total * MIN_FRACTION_OF_EXAMPLES_IN_QUEUE),
-					MAX_ABSOLUTE_EXAMPLES_IN_QUEUE)
+		max_queue_capacity = min(math.ceil(self.total * MIN_FRACTION_OF_EXMPLES_IN_QUEUE),
+					MAX_ABSOLUTE_EXAMLES_IN_QUEUE)
 
 		single_batch = [single_key, single_data]
 		if single_label is not None:
@@ -234,7 +237,7 @@ class LoaderFactory(object):
 				batch_size=self.batch_size,
 				num_threads=NUM_THREADS_DATA_LOADER,
 				capacity=10 * self.batch_size,       # Max amount that will be loaded and queued
-				shapes=[[0], self.get_shape(), []], # Only makes sense is dynamic_pad=False 
+				shapes=[[0], self.get_shape(), []], # Only makes sense is dynamic_pad=False , (key, data, label)
 				min_after_dequeue=5 * self.batch_size,
 				allow_amller_final_batch=True, # Happens if total % batch_size != 0
 				name='batcher'
@@ -257,8 +260,6 @@ class LoaderFactory(object):
 		if len(batch) == 3:
 			# There's lbael (unlike during inferencing)
 			self.batch_y = batch[2]  # Output (label)
-
-
 
 class TFRecordsLoader(LoaderFactory):
 	""" The TFRecordsLoader connects directly into the tensorflow graph.

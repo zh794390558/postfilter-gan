@@ -18,9 +18,10 @@ import timeit
 import re
 from  tqdm import tqdm
 import struct
+import logging
 
-# Mel-CC
-FEATURE_SIZE=41
+logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.INFO)
 
 def _bytes_feature(value):
 	return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -38,6 +39,7 @@ class ExtractFeatureException(Exception):
 	def __str__(self):
 		return 'Not enough frames in file to statisfy read request'
 
+# Extract frames of features from binary file
 class ExtractFeature(object):
 	type_names = {
 		'int8'   : 'b',
@@ -59,7 +61,9 @@ class ExtractFeature(object):
 	}
 
 	def __init__(self, filename, endian='little-endian', type_name='float', feature_size=41):
+		#print('__init__')
 		self.binfile = open(filename, 'rb')
+
 		self.type_name = type_name
 		self.feature_size = feature_size
 		self.file_len = os.stat(filename).st_size
@@ -68,13 +72,19 @@ class ExtractFeature(object):
 		self.type_size = struct.calcsize(self.type_format) 
 
 	def __del__(self):
+		#print('__del__')
+		self._close()
+
+	def __enter__(self):
+		#print('__enter__')
+		return self
+
+	def __exit__(self, exc_type, exc_val, exc_traceback):
+		#print('__exit__')
+		return False
+	
+	def _close(self):
 		self.binfile.close()
-
-	def __enter__(self, filename, endian='little-endian', type_name='float', feature_size=41):
-		self.__init__(self, filename, endian, type_name, feature_size)
-
-	def __exit__(self):
-		self.__del__(self)
 
 	@property
 	def endian(self):
@@ -103,44 +113,44 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
 	if not os.path.exists(gen_filename) or not os.path.exists(nature_filename):
 		raise ValueError("ERROR: gen file or nature file does not exists")
 
-	gen_ext = ExtractFeature(gen_filename, feature_size=feature_size)
-	nat_ext = ExtractFeature(nature_filename, feature_size=feature_size)
+	logging.info(' {} x {}, record len {}'.format(frames, feature_size, frames * feature_size))
 
-	pprint([gen_filename, gen_ext.len, gen_ext.frames , 
-		nature_filename, nat_ext.len, nat_ext.frames])
+	# create extract class
+	with ExtractFeature(gen_filename, feature_size=feature_size) as gen_ext, \
+	     ExtractFeature(nature_filename, feature_size=feature_size) as nat_ext:
 
-	# num of *frames* in file, how many banks of 200 frame
-	bank_len = int(min(gen_ext.frames, nat_ext.frames) / frames)
+		logging.info('file {} len {} frames {}'.format(gen_filename, gen_ext.len, gen_ext.frames))
+		logging.info('file {} len {} frames {}'.format(nature_filename, nat_ext.len, nat_ext.frames))
 
-	gen_features = gen_ext.read(bank_len * frames)
-	nature_features = nat_ext.read(bank_len * frames)
+		# num of *frames* in file, how many banks of 200 frame
+		bank_len = int(min(gen_ext.frames, nat_ext.frames) / frames)
+		logging.info('{} banks of {} frames in any file'.format(bank_len, frames))
 
-	pprint(gen_features[:10])
-	pprint(nature_features[:10])
+		# extract frames from bin file
+		gen_features = gen_ext.read(bank_len * frames)
+		nature_features = nat_ext.read(bank_len * frames)
+
+	#pprint(gen_features[:10])
+	#pprint(nature_features[:10])
 
 	assert gen_features.shape == nature_features.shape, (gen_feautres.shape, nature_features.shape)
-	pprint(gen_features.shape)
 
 	# raw first
 	gen_features.shape = (-1, feature_size) #  frame x feature 
 	nature_features.shape = (-1, feature_size) # frame x feature 
-	pprint(gen_features.shape)
+	logging.info('features raw shape={}'.format(gen_features.shape))
 	
-	# test
-	pprint(np.reshpae(gen_features, [feature_size, frames, 1]))
-	pprint(np.reshpae(gen_features, [feature_size, frames, 1]).shape)
-
 	# bank of 200 frame 
 	n_frames = gen_features.shape[0]
-	pprint(nframes)
+	logging.info('{} of 200 frames'.format(n_frames))
 
 	gen_features = np.transpose(gen_features, (1,0))  # feature x frame
 	nature_features = np.transpose(nature_features, (1,0)) # feature x frame
-	pprint(gen_features.shape)
 
-	gen_features = [:, :, np.newaxis]  # feature x frame x channel 
-	nature_features = [:, :, np.newaxis] # feature x frame x channel
-	pprint(gen_features.shape)
+	gen_features = gen_features[:, :, np.newaxis]  # feature x frame x channel 
+	nature_features = gen_features[:, :, np.newaxis] # feature x frame x channel
+	logging.info('features last shape={}'.format(gen_features.shape))
+
 
 	for n in tqdm(xrange(n_frames), desc='Write Example', ascii=True, leave=False):
 		gen_bytes = gen_features[:, n*frames:(n+1)*frames, :].tobytes()
@@ -190,7 +200,7 @@ def main(opts):
 			gen_dir = dset_val['gen']
 			nature_dir = dset_val['nature']
 			files = [(os.path.join(gen_dir, wav) ,  os.path.join(nature_dir, os.path.splitext(wav)[0] + '.cep'))
-				  for wav in os.listdir(gen_dir)[:10] if wav.endswith('.mcep')]
+				  for wav in os.listdir(gen_dir)[:30] if wav.endswith('.mcep')]
 
 			pprint(files[:1])
 			nfiles = len(files)

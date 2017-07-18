@@ -192,7 +192,7 @@ class UserModel(Tower):
 			self.G = self.generator(self.x, self.y)
 
 	def discriminator(self, image, y=None, reuse=False):
-		 """
+		"""
 		Create the discriminator
 		This creates a string of layers:
 		- input - [N, 28, 28, 1]
@@ -211,9 +211,9 @@ class UserModel(Tower):
 		- concat conditioning - [N, 1034]
 		- linear layer with 1 output neuron - [N, 1]
 		Args:
-		    image: batch of input images - shape: [N, H, W, C]
-		    y: batch of one-hot encoded labels - shape: [N, K]
-		    reuse: whether to re-use previously created variables
+			image: batch of input images - shape: [N, H, W, C]
+			y: batch of one-hot encoded labels - shape: [N, K]
+			reuse: whether to re-use previously created variables
 		"""
 		with tf.variable_scope("discriminator") as scope:
 			if reuse:
