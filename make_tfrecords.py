@@ -54,7 +54,7 @@ class ExtractFeature(object):
 		'double' :'d',
 		'char'   :'s'
 	}
-	
+
 	type_endian = {
 		'little-endian' : '<',
 		'big-endian' : '>',
@@ -69,7 +69,7 @@ class ExtractFeature(object):
 		self.file_len = os.stat(filename).st_size
 		self.type_endian = endian
 		self.type_format = ExtractFeature.type_names[self.type_name.lower()]
-		self.type_size = struct.calcsize(self.type_format) 
+		self.type_size = struct.calcsize(self.type_format)
 
 	def __del__(self):
 		#print('__del__')
@@ -82,7 +82,7 @@ class ExtractFeature(object):
 	def __exit__(self, exc_type, exc_val, exc_traceback):
 		#print('__exit__')
 		return False
-	
+
 	def _close(self):
 		self.binfile.close()
 
@@ -102,7 +102,7 @@ class ExtractFeature(object):
 		record_len = self.feature_size * frames
 		value = self.binfile.read(self.type_size * record_len)
 		if len(value) != self.type_size * record_len:
-			raise ExtractFeatureException 
+			raise ExtractFeatureException
 		return np.asarray(struct.unpack(self.endian +'{}'.format(record_len) + self.type_format, value))
 
 
@@ -136,18 +136,18 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
 	assert gen_features.shape == nature_features.shape, (gen_feautres.shape, nature_features.shape)
 
 	# raw first
-	gen_features.shape = (-1, feature_size) #  frame x feature 
-	nature_features.shape = (-1, feature_size) # frame x feature 
+	gen_features.shape = (-1, feature_size) #  frame x feature
+	nature_features.shape = (-1, feature_size) # frame x feature
 	logging.info('features raw shape={}'.format(gen_features.shape))
-	
-	# bank of 200 frame 
+
+	# bank of 200 frame
 	n_frames = gen_features.shape[0]
 	logging.info('{} of 200 frames'.format(n_frames))
 
 	gen_features = np.transpose(gen_features, (1,0))  # feature x frame
 	nature_features = np.transpose(nature_features, (1,0)) # feature x frame
 
-	gen_features = gen_features[:, :, np.newaxis]  # feature x frame x channel 
+	gen_features = gen_features[:, :, np.newaxis]  # feature x frame x channel
 	nature_features = gen_features[:, :, np.newaxis] # feature x frame x channel
 	logging.info('features last shape={}'.format(gen_features.shape))
 
@@ -159,16 +159,16 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
 		example = tf.train.Example(features=tf.train.Features(feature={
 				'depth':  _int64_feature(1), # channels
 				'height': _int64_feature(feature_size), # feature_szie (41)
-				'weigth': _int64_feature(frames), # frames (200)
+				'width': _int64_feature(frames), # frames (200)
 				'encoding': _int64_feature(0),  # no encoding, fix to 0
 				'image_raw': _bytes_feature(gen_bytes), # gen_features
 				'label': _bytes_feature(nat_bytes)  # nature_features
 			}))
 		out_file.write(example.SerializeToString())
-		
+
 def main(opts):
 	if not tf.gfile.Exists(opts.save_path):
-		# make save path if it does not exist 
+		# make save path if it does not exist
 		tf.gfile.MkDir(opts.save_path)
 	# set up the output filepath
 	out_filepath = os.path.join(opts.save_path, opts.out_file)
@@ -207,7 +207,7 @@ def main(opts):
 
 			#for m, (gen_file, nature_file) in enumerate(files):
 			qbar = tqdm(enumerate(files), total=nfiles)
-			for m, (gen_file, nature_file) in qbar: 
+			for m, (gen_file, nature_file) in qbar:
 				qbar.set_description('Process {}'.format(os.path.basename(gen_file)))
 				encoder_proc(gen_file, nature_file, out_file, opts.feature_size, opts.frames)
 
@@ -217,23 +217,23 @@ def main(opts):
 		print('*' * 50)
 		print('Total processing and writing time: {} s'.format(end_t))
 
-	
+
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Convert the set of wavs to TFRecords')
 
-	parser.add_argument('--cfg', type=str, default='cfg/postfilter.cfg', 
+	parser.add_argument('--cfg', type=str, default='cfg/postfilter.cfg',
 			   help='File containing the description fo datesets'
 				'to extract the info to make the TFRecords.')
-	parser.add_argument('--save_path', type=str, default='data/', 
+	parser.add_argument('--save_path', type=str, default='data/',
 			   help='Path to save the dataset')
-	parser.add_argument('--out_file', type=str, default='postfilter.tfrecords', 
+	parser.add_argument('--out_file', type=str, default='postfilter.tfrecords',
 			    help='Output filename')
 	parser.add_argument('--force-gen', dest='force_gen', action='store_true',
 			    help='Flag to force overwriting exiting dataset.')
 	parser.set_defaults(force_gen=False)
-	parser.add_argument('--frames', type=int, default=200, 
+	parser.add_argument('--frames', type=int, default=200,
 			    help='Frames length')
-	parser.add_argument('--feature_size', type=int, default=41, 
+	parser.add_argument('--feature_size', type=int, default=41,
 			    help='feature length')
 
 	opts = parser.parse_args()

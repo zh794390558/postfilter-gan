@@ -12,6 +12,7 @@ RUN groupadd -f -g 800  zhanghui && \
     apt-get clean &&\
     rm -rf /var/lib/apt/lists/* && \
     git clone --depth=1 https://github.com/amix/vimrc.git /home/zhanghui/.vim_runtime && \
+    chown zhanghui:zhanghui -R /home/zhanghui/.vim_runtime && \
     sed -i '$a sh ~/.vim_runtime/install_awesome_vimrc.sh' /home/zhanghui/.profile
     
 

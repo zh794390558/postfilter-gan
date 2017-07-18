@@ -6,6 +6,8 @@ import logging
 import numpy as np
 import os
 import utils
+from pprint import pprint
+import tensorflow as tf
 
 
 # Constants
@@ -22,11 +24,12 @@ DB_EXTENSIONS = {
 
 LIST_DELIMTIER = ' ' # For the FILELLIST format
 
-logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datafmt='%Y-%m-%d %H:%M:%S', 
-		    level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s',
+                    datafmt='%Y-%m-%d %H:%M:%S',
+		    level=logging.DEBUG)
 
 
-def get_backend_of_soruce(db_path):
+def get_backend_of_source(db_path):
 	"""
 	Takes a path as argument and infers the format of the data.
 	If a directory is provided, it looks for the existance of an extension
@@ -95,16 +98,16 @@ class LoaderFactory(object):
 		loader.is_inference = is_inference
 		return loader
 
-	def setup(self, lables_db_path, shuffle, bitdepth, batch_size, num_epochs=None, seed=None):
+	def setup(self, labels_db_path, shuffle, bitdepth, batch_size, num_epochs=None, seed=None):
 		with tf.device('/cpu:0'):
 			self.labels_db_path = labels_db_path
-		
+
 			self.bitdepth = bitdepth
 			self.shuffle = shuffle
 			self.batch_size = batch_size
 			self.num_epochs = num_epochs
 			self._seed = seed
-			
+
 			if self.labels_db_path:
 				self.labels_db = LoadFactory.set_source(self.labels_db_path)
 				self.lables_db.bitdepth = self.bitdepth
@@ -112,7 +115,7 @@ class LoaderFactory(object):
 				self.labels_db.initialize()
 
 			self.initialize()
-			logging.info('Found {} images in db {}'.format(self.get_total(), self.db_path))
+			logging.info('Found {} images in db ({})'.format(self.get_total(), self.db_path))
 
 	def get_key_index(self, key):
 		return self.keys.index(key)
@@ -215,7 +218,7 @@ class LoaderFactory(object):
 		if self.croplen:
 			with tf.name_scope('cropping'):
 				if self.stage == utils.STAGE_TRAIN:
-					single_data = tf.random_crop(single_data, 
+					single_data = tf.random_crop(single_data,
 								    [self.croplen, self.croplen, self.channels],
 								    seed=self._seed)
 				else:
@@ -278,19 +281,22 @@ class TFRecordsLoader(LoaderFactory):
 		elif self.bitdepth == 16:
 			self.image_dtype= tf.uin16
 		else:
-			self.image_dtype = tf.float32 
+			self.image_dtype = tf.float32
 
 		# Count all the records @TODO(tzaman): account for shards!
 		# Loop the records in path @TODO(tzaman) get this from a txt?
 		# self.db_path += '/test.tfrecords' # @TODO(tzaman) this is a hack
-	
+
 		self.shard_paths = []
 		list_db_files = os.path.join(self.db_path, 'list.txt')
 		self.total = 0
 		if os.path.exists(list_db_files):
 			files = [os.path.join(self.db_path, f) for f in open(list_db_files, 'r').read().splitlines()]
+                elif os.path.exists(self.db_path):
+                        files = [os.path.join(self.db_path, f) for f in os.listdir(self.db_path)]
 		else:
 			files = [self.db_path]
+                logging.debug('{}: files {}'.format(__file__, files))
 		for shard_path in files:
 			# Account for the relative path format in list.txt
 			record_iter = tf.python_io.tf_record_iterator(shard_path)
@@ -303,7 +309,7 @@ class TFRecordsLoader(LoaderFactory):
 
 		# Use last record read to extract some preliminary data that is sometimes needed or useful
 		example_proto = tf.train.Example()
-		example_proto.PsrseFromString(r)
+		example_proto.ParseFromString(r)
 
 		self.channels = example_proto.features.feature['depth'].int64_list.value[0]
 		self.height = example_proto.features.feature['height'].int64_list.value[0]
@@ -337,7 +343,7 @@ class TFRecordsLoader(LoaderFactory):
 			# Defaults are not specified since both keys are required.
 			features={
 				'image_raw': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # x data
-				'label': tf.FixdLenFeature([self.height, self.witdh, self.channels], tf.float32), # y condition 
+				'label': tf.FixdLenFeature([self.height, self.witdh, self.channels], tf.float32), # y condition
 			})
 
 		d = features['image_raw']

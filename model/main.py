@@ -22,9 +22,10 @@ TF_INTRA_OP_THREADS = 0
 TF_INTER_OP_THREADS = 0
 MIN_LOGS_PER_TRAIN_EPOCH = 8  # torch default: 8
 
-logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.INFO)
+logging.basicConfig(format='%(asctime)s %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s',
+                     datafmt='%Y-%m-%d %H:%M:%S',
+                     level=logging.INFO)
+
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -184,7 +185,7 @@ def main(_):
 
 		if FLAGS.train_db:
 			with tf.name_scope(utils.STAGE_TRAIN) as stage_scope:
-				train_model = Model(utils.STAGE_TRAIN, FLAGS.croplen, nclasses, FLAGS.optimizaiton, FLAGS.momentum)
+				train_model = Model(utils.STAGE_TRAIN, FLAGS.croplen, nclasses, FLAGS.optimization, FLAGS.momentum)
 				train_model.create_dataloader(FLAGS.train_db)
 				train_model.dataloader.setup(FLAGS.train_labels,
 							     FLAGS.shuffle,

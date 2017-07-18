@@ -10,7 +10,7 @@ spec:
     - /bin/bash
     - -c
     image: harbor.ail.unisound.com/zhanghui/tensorflow-cpu-1.2.1:latest 
-    imagePullPolicy: IfNotPresent
+    imagePullPolicy: Always 
     name: gan 
     volumeMounts:
     - mountPath: /gfs
