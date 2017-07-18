@@ -124,18 +124,35 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
 	# raw first
 	gen_features.shape = (-1, feature_size) #  frame x feature 
 	nature_features.shape = (-1, feature_size) # frame x feature 
-	
 	pprint(gen_features.shape)
-	# banck of 200 frame 
+	
+	# test
+	pprint(np.reshpae(gen_features, [feature_size, frames, 1]))
+	pprint(np.reshpae(gen_features, [feature_size, frames, 1]).shape)
+
+	# bank of 200 frame 
 	n_frames = gen_features.shape[0]
+	pprint(nframes)
+
+	gen_features = np.transpose(gen_features, (1,0))  # feature x frame
+	nature_features = np.transpose(nature_features, (1,0)) # feature x frame
+	pprint(gen_features.shape)
+
+	gen_features = [:, :, np.newaxis]  # feature x frame x channel 
+	nature_features = [:, :, np.newaxis] # feature x frame x channel
+	pprint(gen_features.shape)
 
 	for n in tqdm(xrange(n_frames), desc='Write Example', ascii=True, leave=False):
-		gen_bytes = gen_features[n*frames:(n+1)*frames, :].tobytes()
-		nat_bytes = nature_features[n*frames:(n+1)*frames, :].tobytes()
+		gen_bytes = gen_features[:, n*frames:(n+1)*frames, :].tobytes()
+		nat_bytes = nature_features[:, n*frames:(n+1)*frames, :].tobytes()
 
 		example = tf.train.Example(features=tf.train.Features(feature={
-				'gen_features': _bytes_feature(gen_bytes),
-				'nature_features': _bytes_feature(nat_bytes) 
+				'depth':  _int64_feature(1), # channels
+				'height': _int64_feature(feature_size), # feature_szie (41)
+				'weigth': _int64_feature(frames), # frames (200)
+				'encoding': _int64_feature(0),  # no encoding, fix to 0
+				'image_raw': _bytes_feature(gen_bytes), # gen_features
+				'label': _bytes_feature(nat_bytes)  # nature_features
 			}))
 		out_file.write(example.SerializeToString())
 		

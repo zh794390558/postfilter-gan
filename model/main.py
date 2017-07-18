@@ -153,7 +153,7 @@ def main(_):
 
 		if not os.path.exists(FLAGS.save):
 			os.makedirs(FLAGS.save)
-			 logging.info("Created a directory %s to save all the snapshots", FLAGS.save)
+			logging.info("Created a directory %s to save all the snapshots", FLAGS.save)
 
 		classes = 0
 		nclasses = 0
@@ -174,10 +174,10 @@ def main(_):
 		try:
 			UserModel
 		except NameError:
-			logging.error('The user model class 'UserModel' is not defined.')
+			logging.error("The user model class 'UserModel' is not defined.")
 			exit(-1)
 		if not inspect.isclass(UserModel):
-			logging.error('The user model class 'UserModel' is not a class.')
+			logging.error("The user model class 'UserModel' is not a class.")
 			eixt(-1)
 
 		if FLAGS.train_db:
@@ -226,7 +226,7 @@ def main(_):
 		if FLAGS.save_vars == 'all':
 			vars_to_save = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
 			# vars_to_save = tf.global_variables()
-		elif FLAGS.save_vars = 'trainable':
+		elif FLAGS.save_vars == 'trainable':
 			vars_to_save = tf.trainable_variables()
 		else:
 			logging.error('Unknown save_var flag ({})'.format(FLAGS.save_vars))
@@ -275,16 +275,15 @@ def main(_):
 
 	         # epoch value will be calculated for every batch size. To maintain unique epoch value between batches,
 	         # it needs to be rounded to the required number of significant digits.
-                 epoch_round = 0  # holds the required number of significant digits for round function.
-		 tmp_batchsize = batch_size_train*logging_interval_step
-		 while tmp_batchsize <= train_model.dataloader.get_total():
+		epoch_round = 0  # holds the required number of significant digits for round function.
+		tmp_batchsize = batch_size_train * logging_interval_step
+		while tmp_batchsize <= train_model.dataloader.get_total():
 			tmp_batchsize = tmp_batchsize * 10
 			epoch_round += 1
-		 logging.info("While logging, epoch value will be rounded to %s significant digits", epoch_round)
+		logging.info("While logging, epoch value will be rounded to %s significant digits", epoch_round)
 		
 	 	# Create the learning rate policy
-		toatl_training_steps = train_model.dataload.num_epochs * train_model.dataloader.get_total() / 
-					train_model.dataloader.batch_size	
+		toatl_training_steps = train_model.dataload.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size	
 
 		lrpolicy  = lr_policy.LRPolicy(FALGS.lr_policy,
 						FALGS.lr_base_rate,	
@@ -349,13 +348,13 @@ def main(_):
 							    FLAGS.snapshotInterval
 					last_snapshot_save_epoch = current_epoch
 				writer.flush()
-			except tf.errors.OutOfRangeError:
-				logging.info('Done training for epochs: tf.errors.OutOfRangeError')
-			except ValueError as err:
-				logging.error(err.args[0])
-				exit(-1)
-			except (KeyboardInterrupt):
-				logging.info('Interrupt signal received.')
+		except tf.errors.OutOfRangeError:
+			logging.info('Done training for epochs: tf.errors.OutOfRangeError')
+		except ValueError as err:
+			logging.error(err.args[0])
+			exit(-1)
+		except (KeyboardInterrupt):
+			logging.info('Interrupt signal received.')
 
 	
 			# If required, perform final snapshot save

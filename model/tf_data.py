@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import logging
 import numpy as np
 import os
@@ -23,15 +27,15 @@ logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datafmt='%
 
 
 def get_backend_of_soruce(db_path):
-    """
-    Takes a path as argument and infers the format of the data.
-    If a directory is provided, it looks for the existance of an extension
-    in the entire directory in an order of a priority of dbs (hdf5, lmdb, filelist, file)
-    Args:
-	db_path: path to a file or directory
-    Returns:
-	backend: the backend type
-    """
+	"""
+	Takes a path as argument and infers the format of the data.
+	If a directory is provided, it looks for the existance of an extension
+	in the entire directory in an order of a priority of dbs (hdf5, lmdb, filelist, file)
+	Args:
+		db_path: path to a file or directory
+	Returns:
+		backend: the backend type
+	"""
 	# If a directory is given, we include all its contents. Otherwise it's just the one file.
 	if os.path.isdir(db_path):
 		files_in_path = [fn for fn in os.listdir(db_path) if not fn.startswith('.')]
@@ -50,11 +54,11 @@ def get_backend_of_soruce(db_path):
 
 
 class LoaderFactory(object):
-    """
-    A factory for data loading. It sets up a subclass with data loading
-    done with the respective backend. Its output is a tensorflow queue op
-    that is used to load in data, with optionally some minor postprocessing ops.
-    """
+	"""
+	A factory for data loading. It sets up a subclass with data loading
+	done with the respective backend. Its output is a tensorflow queue op
+	that is used to load in data, with optionally some minor postprocessing ops.
+	"""
 	def __init__(self):
 		self.corplen = None
 		self.nclasses = None
@@ -79,6 +83,7 @@ class LoaderFactory(object):
 		"""
 		backend = get_backend_of_source(db_path)
 		loader = None
+
 		if backend == 'tfrecords':
 			loader = TFRecordsLoader()
 		else:
@@ -94,8 +99,8 @@ class LoaderFactory(object):
 		with tf.device('/cpu:0'):
 			self.labels_db_path = labels_db_path
 		
-			self.shuffle = shuffle
 			self.bitdepth = bitdepth
+			self.shuffle = shuffle
 			self.batch_size = batch_size
 			self.num_epochs = num_epochs
 			self._seed = seed
@@ -205,7 +210,7 @@ class LoaderFactory(object):
 		# (Random Cropping
 		if self.croplen:
 			with tf.name_scope('cropping'):
-				if self.stage = utils.STAGE_TRAIN:
+				if self.stage == utils.STAGE_TRAIN:
 					single_data = tf.random_crop(single_data, 
 								    [self.croplen, self.croplen, self.channels],
 								    seed=self._seed)
@@ -223,12 +228,12 @@ class LoaderFactory(object):
 		if single_label is not None:
 			single_batch.append(single_label)
 
-		if self.backend = 'tfrecords' and self.shuffle:
+		if self.backend == 'tfrecords' and self.shuffle:
 			batch = tf.train.shuffle_batch(
 				single_batch,
 				batch_size=self.batch_size,
 				num_threads=NUM_THREADS_DATA_LOADER,
-				capacity=10 * self.batch_size       # Max amount that will be loaded and queued
+				capacity=10 * self.batch_size,       # Max amount that will be loaded and queued
 				shapes=[[0], self.get_shape(), []], # Only makes sense is dynamic_pad=False 
 				min_after_dequeue=5 * self.batch_size,
 				allow_amller_final_batch=True, # Happens if total % batch_size != 0
@@ -241,7 +246,7 @@ class LoaderFactory(object):
 				dynamic_pad=True, # Allows us to not suplly fixed shape a priori
 				enqueue_many=False, # Each tensor is a single example
 				# set number of threads to 1 for tfrecords (used for inference)
-				num_threads=NUM_THREADS_DATA_LOADER is not self.is_inference else 1,
+				num_threads=NUM_THREADS_DATA_LOADER if not self.is_inference else 1,
 				capacity=max_queue_capacity,   # Max amout that will be loadded and queued
 				allow_smaller_final_batch=True, # Happens if total % batch_size != 0
 				name='batcher',
@@ -256,9 +261,9 @@ class LoaderFactory(object):
 
 
 class TFRecordsLoader(LoaderFactory):
-    """ The TFRecordsLoader connects directly into the tensorflow graph.
-    It uses TFRecords, the 'standard' tensorflow data format.
-    """
+	""" The TFRecordsLoader connects directly into the tensorflow graph.
+	It uses TFRecords, the 'standard' tensorflow data format.
+	"""
 	def __init__(self):
 		pass
 
@@ -267,10 +272,12 @@ class TFRecordsLoader(LoaderFactory):
 		self.unencoded_data_format = 'hwc'
 		self.unencoded_channel_scheme = 'rgb'
 		self.reader = None
-		if self.bidepth == 8:
+		if self.bitdepth == 8:
 			self.image_dtype = tf.uin8
-		else:
+		elif self.bitdepth == 16:
 			self.image_dtype= tf.uin16
+		else:
+			self.image_dtype = tf.float32 
 
 		# Count all the records @TODO(tzaman): account for shards!
 		# Loop the records in path @TODO(tzaman) get this from a txt?
@@ -328,12 +335,13 @@ class TFRecordsLoader(LoaderFactory):
 			serialized_example,
 			# Defaults are not specified since both keys are required.
 			features={
-				'image_raw': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32),
-				'label': tf.FixdLenFeature([], tf.int64),
+				'image_raw': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # x data
+				'label': tf.FixdLenFeature([self.height, self.witdh, self.channels], tf.float32), # y condition 
 			})
 
 		d = features['image_raw']
 		ds = np.array([self.height, self.width, self.channels], dtype=np.int32)
 		l = features['lablel']
-		ls = np.array([], dtype=np.int32)
+		ls = np.array([self.height, self.width, self.channels], dtype=np.int32)
 		return key, d, ds, l, ls
+

@@ -1,6 +1,7 @@
 import logging
-import utils 
 from tensorflow.python.framework import ops
+import utils 
+from utils import model_property
 
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s',
@@ -248,26 +249,26 @@ class Model(object):
 			self.summaries.append(tf.scalar_summary('lr', lr))
 			return lr
 
-	@model_preperty
+	@model_property
 	def optimizer(self):
 		logging.info('Optimizer:%s', self._optimization)
 		if self._optimizatioin == 'sgd':
 			return tf.train.GradientDescentOptimizer(learing_rate=self.learning_rate)
 		elif self._optimization =='adadelta':
 			return tf.train.AdadeltaOptimizer(learing_rate=self.learing_rate)
-		elif self._optimization = 'adagrad':
+		elif self._optimization == 'adagrad':
 			return tf.train.AdagradOptimizer(learing_rate=self.learing_rate)
-		elif self._optimizaiton = 'adagradda':
+		elif self._optimizaiton == 'adagradda':
 			return tf.train.AdagradDAOptimizer(learning_rate=self.learning_rate, 
 							   global_step=self.global_step)
-		elif self._optimization = 'momentum':
+		elif self._optimization == 'momentum':
 			return tf.train.MomentumOptimizer(learing_rate=self.learning_rate,
 							  momentum=self._momentum)
-		elif self._optimization ='adam':
+		elif self._optimization == 'adam':
 			return tf.train.AdamOptimizer(learning_rate=self.learning_rate)
-		elif self._optimization = 'ftrl':
+		elif self._optimization == 'ftrl':
 			return tf.train.FtrlOptimizer(learning_rate=self.learning_rate)
-		elif self_optimization ='rmsprop':
+		elif self_optimization == 'rmsprop':
 			return tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, 
                                                          momentum=self._momenttum)
 		else:
