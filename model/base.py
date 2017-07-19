@@ -49,6 +49,7 @@ def average_gradients(tower_grads):
             across all towers.
         """
         pprint(towr_grads[0][:])
+
         with tf.name_scope('gradient_average'):
                 average_grads = []
                 for grad_and_vars in zip(*tower_grads):
@@ -96,6 +97,7 @@ class Model(object):
         def create_dataloader(self, db_path):
                 self.dataloader = tf_data.LoaderFactory.set_source(db_path, is_inference=(self.stage == utils.STAGE_INF))
                 self.dataloader.stage = self.stage
+
                 self.dataloader.croplen = self.croplen
                 self.dataloader.nclasses = self.nclasses
 
@@ -127,7 +129,7 @@ class Model(object):
                         if self.stage != utils.STAGE_INF: # Has no labels
                                 batch_y_split = [batch_y]
                 else:
-                        with tf.name_socpe('parallelize'):
+                        with tf.name_scope('parallelize'):
                                 # Split them up
                                 batch_x_split = tf.split(batch_x, len(available_devices), 0, name='split_batch')
                                 if self.stage != utils.STAGE_INF: # Has no labels
@@ -135,49 +137,50 @@ class Model(object):
 
                 # Run the user model through the build_model function that should be filled in
                 grad_towers = []
-                for dev_i, dev_name in enumerate(available_devices):
-                        with tf.device(dev_name):
-                                current_scope = stage_scope if len(available_devices) == 1 else ('tower_{}'.format(dev_i))
-                                with tf.name_scope(current_scope) as scope_tower:
-                                        if self.stage != utils.STAGE_INF:
-                                                tower_model = self.add_tower(obj_tower=obj_UserModel,
-                                                                             x=batch_x_split[dev_i],
-                                                                             y=batch_y_split[dev_i])
-                                        else:
-                                                tower_model = self.add_tower(obj_tower=obj_User_model,
-                                                                             x=batch_x_split[dev_i],
-                                                                             y=None)
+                with tf.variable_scope(tf.get_variable_scope()):
+                    for dev_i, dev_name in enumerate(available_devices):
+                            with tf.device(dev_name):
+                                    current_scope = stage_scope if len(available_devices) == 1 else ('tower_{}'.format(dev_i))
+                                    with tf.name_scope(current_scope) as scope_tower:
+                                            if self.stage != utils.STAGE_INF:
+                                                    tower_model = self.add_tower(obj_tower=obj_UserModel,
+                                                                                 x=batch_x_split[dev_i],
+                                                                                 y=batch_y_split[dev_i])
+                                            else:
+                                                    tower_model = self.add_tower(obj_tower=obj_User_model,
+                                                                                 x=batch_x_split[dev_i],
+                                                                                 y=None)
 
-                                        with tf.variable_scope(utils.GrapKeys.MODEL, reuse=dev_i > 0):
-                                                tower_model.inference # touch to initialize
+                                            with tf.variable_scope(utils.GraphKeys.MODEL, reuse=dev_i > 0):
+                                                    tower_model.inference # touch to initialize
 
-                                        if self.stage == utils.STAGE_INF:
-                                                # For inferencing we will only use the inference part of the graph
-                                                continue
+                                            if self.stage == utils.STAGE_INF:
+                                                    # For inferencing we will only use the inference part of the graph
+                                                    continue
 
 
-                                        with tf.name_scope(uitls.GraphKeys.LOSS):
-                                                for loss in self.get_tower_losses(tower_model):
-                                                        tf.add_to_collection(utils.GraphKeys.LOSSES, loss['loss'])
+                                            with tf.name_scope(utils.GraphKeys.LOSS):
+                                                    for loss in self.get_tower_losses(tower_model):
+                                                            tf.add_to_collection(utils.GraphKeys.LOSSES, loss['loss'])
 
-                                                # Assemble all made within this scope so far. The user can add custom
-                                                # losses to the utils.GraphKeys.LOSSES collection
-                                                losses = tf.get_collection(utils.GraphKeys.LOSSES, scope=scope_tower)
-                                                losses += ops.get_collection(ops.GraphKeys.REGULARIZATION_LOSSES, scope=None)
-                                                tower_loss = tf.add_n(losses, name='loss')
+                                                    # Assemble all made within this scope so far. The user can add custom
+                                                    # losses to the utils.GraphKeys.LOSSES collection
+                                                    losses = tf.get_collection(utils.GraphKeys.LOSSES, scope=scope_tower)
+                                                    losses += ops.get_collection(ops.GraphKeys.REGULARIZATION_LOSSES, scope=None)
+                                                    tower_loss = tf.add_n(losses, name='loss')
 
-                                                self.summaries.append(scalar_summary(tower_loss.op.name, tower_loss))
+                                                    self.summaries.append(scalar_summary(tower_loss.op.name, tower_loss))
 
-                                        # Reuse the variables int this scope for the next tower/device
-                                        tf.get_variables_scope().reuse_variables()
+                                            # Reuse the variables int this scope for the next tower/device
+                                            tf.get_variable_scope().reuse_variables()
 
-                                        if self.stage == utils.STGE_TRAIN:
-                                                grad_tower_losses = []
-                                                for loss in self.get_tower_losses(tower_model):
-                                                        grad_tower_loss = self.optimizer.compute_gradients(loss['loss'], loss['var'])
-                                                        grad_tower_loss = tower_model.gradientUpdate(grad_tower_loss)
-                                                        grad_tower_losses.append(grad_tower_loss)
-                                                grad_towers.append(grad_tower_losses)
+                                            if self.stage == utils.STAGE_TRAIN:
+                                                    grad_tower_losses = []
+                                                    for loss in self.get_tower_losses(tower_model):
+                                                            grad_tower_loss = self.optimizer.compute_gradients(loss['loss'], loss['vars'])
+                                                            grad_tower_loss = tower_model.gradientUpdate(grad_tower_loss)
+                                                            grad_tower_losses.append(grad_tower_loss)
+                                                    grad_towers.append(grad_tower_losses)
 
                 # Assemble and average the gradients from all towers
                 if self.stage == utils.STAGE_TRAIN:
@@ -192,7 +195,7 @@ class Model(object):
                                                 grad_averages.append(average_gradients([grad_towers[gpu][loss] for gpu in xrange(n_gpus)]))
                         apply_gradient_ops = []
                         for grad_avg in grad_averages:
-                                apply_gradient_ops.append(self.optimizer.apply_graidents(grad_avg, global_step=self.global_step))
+                                apply_gradient_ops.append(self.optimizer.apply_gradients(grad_avg, global_step=self.global_step))
 
 
         def start_queue_runners(self, sess):
@@ -213,7 +216,7 @@ class Model(object):
                 # Destructor
                 if self.queue_coord:
                         # Close and terminate the queues
-                        self.queue_coord.reuqest_stop()
+                        self.queue_coord.request_stop()
                         self.queue_coord.join(self.queue_threads)
 
         def add_tower(self, obj_tower, x, y):
@@ -240,7 +243,7 @@ class Model(object):
                 if not len(self.summaries):
                         logging.error('No summaies defined. Please define at least one summary.')
                         exit(-1)
-                return tf.merge_summary(self.summaries)
+                return tf.summary.merge(self.summaries)
 
         @model_property
         def global_step(self):

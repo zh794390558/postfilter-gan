@@ -76,7 +76,7 @@ def conv2d(input_, output_dim,
         Composed tensor.
     """
     with tf.variable_scope(name):
-        w = tf.get_variable('w', [k_h, k_w, input_.get_shape()[-1], output_dim],
+        w = tf.get_variable('w', [k_h, k_w, input_.get_shape().as_list()[-1], output_dim],
                             initializer=tf.truncated_normal_initializer(stddev=stddev))
         conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding='SAME')
 

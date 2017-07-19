@@ -160,8 +160,8 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
 				'height': _int64_feature(feature_size), # feature_szie (41)
 				'width': _int64_feature(frames), # frames (200)
 				'encoding': _int64_feature(0),  # no encoding, fix to 0
-				'image_raw': _bytes_feature(gen_bytes), # gen_features
-				'label': _bytes_feature(nat_bytes)  # nature_features
+				'image_raw': _bytes_feature(gen_bytes), # nature_features
+				'label': _bytes_feature(nat_bytes)  # gen_features
 			}))
 		out_file.write(example.SerializeToString())
 

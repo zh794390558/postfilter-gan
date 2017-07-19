@@ -38,15 +38,15 @@ class UserModel(Tower):
                 super(UserModel, self).__init__(*args, **kwargs)
 
                 # initialize graph with parameters
-                self.dcgain_init()
+                self.postfilter_gan_init()
 
         @model_property
         def inference(self):
-                ''' op to use for inference'''
-
-                # inference op is the output of the generator after rescaling
-                # to the 8-bit range
-                return tf.to_int32(self.G * 255)
+                '''
+                op to use for inference
+                '''
+                # inference op is the output of the generator
+                return self.G
 
 
         @model_property
@@ -72,24 +72,25 @@ class UserModel(Tower):
                 ]
                 return losses
 
-        def dcgan_init(self, image_size=108,
-                        output_size=64, y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
-                        gfc_dim=1024, dfc_dim=1024, c_dim=3):
+        def postfilter_gan_init(self, image_height=41, image_width=200,
+                        y_dim=1, z_dim=1, gf_dim=128, df_dim=64,
+                        gfc_dim=None, dfc_dim=None, c_dim=1, window=41):
                 """
                 Create the model
+                Paper: GENERATIVE ADVERSARIAL NETWORK-BASED POSTFILTER FOR STATISTICAL PARAMETRIC SPEECH SYNTHESIS
                 Args:
-                    output_size: (optional) The resolution in pixels of the images. [64]
-                    y_dim: (optional) Dimension of dim for y. [None]
-                    z_dim: (optional) Dimension of dim for Z. [100]
-                    gf_dim: (optional) Dimension of gen filters in first conv layer. [64]
+                    image_height: The Mel-cepstrum Coeffiecnt of input of G. [41]
+                    image_width: The frames in Mel-cepstrum of input of G [200]
+                    y_dim: (optional) Dimension of dim for y, same to input of G. [batch_height, width, 1]
+                    z_dim: (optional) Dimension of dim for Z. [batch, height, width, 1]
+                    gf_dim: (optional) Dimension of gen filters in first conv layer. [128]
                     df_dim: (optional) Dimension of discrim filters in first conv layer. [64]
-                    gfc_dim: (optional) Dimension of gen units for for fully connected layer. [1024]
-                    dfc_dim: (optional) Dimension of discrim units for fully connected layer. [1024]
-                    c_dim: (optional) Dimension of image color. For grayscale input, set to 1. [3]
+                    gfc_dim: (optional) Dimension of gen units for for fully connected layer. [0]
+                    dfc_dim: (optional) Dimension of discrim units for fully connected layer. [None]
+                    c_dim: (optional) Dimension of image color. For grayscale input, set to 1. For RGB input, set to 3. [1]
                 """
-
-                self.image_size = image_size
-                self.output_size = output_size
+                self.image_height = image_height
+                self.image_width = image_width
 
                 self.y_dim = y_dim
                 self.z_dim = z_dim
@@ -99,15 +100,21 @@ class UserModel(Tower):
 
                 self.c_dim = c_dim
 
+                # for D crop input image
+                self.window = window
+
                 self.batch_size = tf.shape(self.x)[0]
 
                 # batch normalization: deals with poor initialization helps gradient flow
                 self.d_bn1 = batch_norm(name='d_bn1')
                 self.d_bn2 = batch_norm(name='d_bn2')
+                self.d_bn3 = batch_norm(name='d_bn3')
+                self.d_bn4 = batch_norm(name='d_bn4')
 
                 self.g_bn0 = batch_norm(name='g_bn0')
                 self.g_bn1 = batch_norm(name='g_bn1')
                 self.g_bn2 = batch_norm(name='g_bn2')
+                self.g_bn3 = batch_norm(name='g_bn3')
 
                 self.build_model()
 
@@ -117,41 +124,46 @@ class UserModel(Tower):
                 if not self.is_inference:
                         # create both the generator and the discriminator
                         # self.x is a batch of images - shape: [N, H, W, C]
-                        # self.y is a vector of labels - shape: [N]
+                        # self.y is a vector of labels - shape: [N, H, W, C], SYN features
 
-                        # sample z from a normal distribution
-                        self.z = tf.random_normal(shape=[self.batch_size, self.z_dim], dtype=tf.float32, seed=None, name='z')
+                        # sample z from a normal distribution - shape: [N, H, W, C]
+                        self.z = tf.random_normal(shape=[self.batch_size, self.image_height, self.image_width, self.c_dim], dtype=tf.float32, seed=None, name='z')
 
                         # rescale x to [0,1]
-                        x_resahped = tf.reshape(self.x, shape=[self.batch_size, self.image_size, self.image_size, self.c_dim], name='x_reshaped')
-                        self.images = xreshaped / 255.
+                        x_reshaped = tf.reshape(self.x, shape=[self.batch_size, self.image_height, self.image_width, self.c_dim], name='x_reshaped')
+                        self.images = x_reshaped
 
+                        '''
                         # one hot encode the label -- shape:[N] -> [N, self.y_dim]
                         self.y = tf.one_hot(self.y, self.y_dim, name='y_onehot')
+                        '''
 
                         # create the generator
                         self.G = self.generator(self.z, self.y)
 
+                        # crop window
+                        offset = np.random.randint(0, self.image_width - self.window)
+
                         # create one instance of the discriminator for real images (the input is
                         # images from the dataset)
-                        self.D, self.D_logits = self.discriminator(self.images, self.y, reuse=False)
+                        self.D, self.D_logits = self.discriminator(self.images, self.y, reuse=False, offset=offset, window=self.window)
 
                         # create another instance of the discriminator for fake images (the input is
                         # the discriminator). Note how we are resuing varibales to share weights between
                         # both instances of the discriminator
-                        self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
+                        self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True, offset=offset, window=self.window)
 
                         # aggreate losses across batch
 
                         # we are using the cross entropy loss for all these losses
-                        self.d_loos_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D), name='loss_D_real'))
-                        self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_), name='loss_D_fake'))
+                        self.d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits, labels=tf.ones_like(self.D), name='loss_D_real'))
+                        self.d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.D_logits_, labels=tf.zeros_like(self.D_), name='loss_D_fake'))
                         self.d_loss = (self.d_loss_real + self.d_loss_fake) / 2.
 
                         # the typical GAN set-up is that of a minmax game where D is tring to minimize its own error and G is trying to
                         # maxminize D's error. However note how we are flipping G labels here: instaed of maximizing D's error, we are
                         # minimizing D's error on the 'wrong' label, this trick helps produce a stronger gradient
-                        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_), name='loss_G'))
+                        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(self.D_), logits=self.D_logits_, name='loss_G'))
 
                         # create some summaries for debug and monitoring
                         self.summaries.append(histogram_summary("z", self.z))
@@ -169,9 +181,9 @@ class UserModel(Tower):
                         # all trainable variabels
                         t_vars = tf.trainable_variables()
                         # G's variables
-                        self.g_vars = [var for var in t_vars is 'g_' in var.name]
+                        self.g_vars = [var for var in t_vars if 'g_' in var.name]
                         # D's variabels
-                        self.d_vars = [var for var in t_vars is 'd_' in var.name]
+                        self.d_vars = [var for var in t_vars if 'd_' in var.name]
 
                         # Extra hook for debug: log chi-square distance between G's output histgram and the dataset' histogram
                         value_range = [0.0, 1.0]
@@ -183,36 +195,37 @@ class UserModel(Tower):
                 else:
                         # Create only the generator
 
-                        # self.x is the conditioned latent representation -- shape: [self.batch_size, 1, self.z_dim + self.y_dim]
-                        self.x = tf.reshape(self.x, shape=[self.batch_size, self.z_dim + self.y_dim])
+                        # self.x is the conditioned latent representation -- shape: [self.batch_size, self.image_height, self.image_width, self.z_dim + self.y_dim]
+                        self.x = tf.reshape(self.x, shape=[self.batch_size,  self.z_dim + self.y_dim])
+                        assert self.x.get_shape().as_list() == [self.batch_size, self.image_height, self.image_width, self.z_dim + self.y_dim], self.x.get_shape().as_list()
                         # extract z and y
-                        self.y = self.x[:, self.z_dim:self.z_dim + self.y_dim]
-                        self.z = self.x[:, :self.z_dim]
+                        self.y = self.x[:, :, :, self.z_dim:self.z_dim + self.y_dim]
+                        self.z = self.x[:, :, :, :self.z_dim]
                         # create an instance of the generator
                         self.G = self.generator(self.x, self.y)
 
-        def discriminator(self, image, y=None, reuse=False):
+        def discriminator(self, image, y=None, reuse=False, offset=0, window=41):
                 """
                 Create the discriminator
                 This creates a string of layers:
-                - input - [N, 28, 28, 1]
-                - concat conditioning - [N, 28, 28, 11]
-                - conv layer with 11 5x5 kernels and 2x2 stride - [N, 14, 14, 11]
-                - leaky relu - [N, 14, 14, 11]
-                - concat conditioning - [N, 14, 14, 21]
-                - conv layer with 74 5x5 kernels and 2x2 stride - [N, 7, 7, 74]
-                - batch norm - [N, 7, 7, 64]
-                - leaky relu - [N, 7, 7, 64]
-                - flatten - [N, 3626]
-                - concat conditioning - [N, 3636]
-                - linear layer with 1014 output neurons - [N, 1024]
-                - batch norm - [N, 1024]
-                - leaky relu - [N, 1024]
-                - concat conditioning - [N, 1034]
+                - input - [N, 41, 41, 1]
+                - conv layer with 5x5 kernels and 1x1 stride - [N, 41, 41, 64]
+                - batch norm - [N, 41, 41, 64]
+                - leaky relu - [N, 41, 41, 64]
+                - conv layer with  5x5 kernels and 2x2 stride - [N, 20, 20, 128]
+                - batch norm - [N, 20, 20, 128]
+                - leaky relu - [N, 20, 20, 128]
+                - conv layer with  3x3 kernels and 2x2 stride - [N, 10, 10, 256]
+                - batch norm - [N, 10, 10, 256]
+                - leaky relu - [N, 10, 10, 256]
+                - conv layer with  3x3 kernels and 2x2 stride - [N, 5, 5, 128]
+                - batch norm - [N, 5, 5, 128]
+                - leaky relu - [N, 5, 5, 128]
+                - flatten - [N, 3200]
                 - linear layer with 1 output neuron - [N, 1]
                 Args:
                         image: batch of input images - shape: [N, H, W, C]
-                        y: batch of one-hot encoded labels - shape: [N, K]
+                        y: batch of  labels - shape: [N, H, W, C]
                         reuse: whether to re-use previously created variables
                 """
                 with tf.variable_scope("discriminator") as scope:
@@ -220,60 +233,66 @@ class UserModel(Tower):
                                 # re-use (share) variabels
                                 scope.reuse_variables()
 
-                        yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-                        x = conv_and_concat(image, yb)
+                        s1, s2, s3 = int(self.df_dim), int(self.df_dim*2), int(self.df_dim*3)
 
-                        h0 = lrelu(conv2d(x, self.c_dim + self.y_dim, name='d_h0_conv'))
-                        h0 = conv_cond_concat(h0, yb)
+                        logging.debug('D: input shape {}'.format(image.get_shape().as_list()))
 
-                        h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim + self.y_dim, name='d_h1_conv'), train=self.is_tranining))
-                        sz = h1.get_shape()
-                        h1 = tf.reshape(h1, [self.batch_size, int(sz[1] * sz[2] * sz[3])])
-                        h1 = tf.concat(1, [h1, y])
+                        # crop a window of image
+                        x = tf.image.crop_to_bounding_box(image, offset_height=0, offset_width=offset,
+                                target_height=window, target_width=window)
 
-                        h2 = lrelu(self.d_bn2(linear(h1, self.dfc_dim, 'd_h2_lin'), train=self.is_trainning))
-                        h2 = tf.concat(1, [h2, y])
+                        logging.debug('D: Croped input shape {}'.format(x.get_shape().as_list()))
 
-                        h3 = linear(h2, 1, 'd_h3_lin')
+                        h0 = conv2d(x, s1, k_h=5, k_w=5, d_h=1, d_w=1, name='d_h0_conv')
+                        h0 = lrelu(self.d_bn1(h0, train=self.is_trainning))
 
-                        return tf.nn.sigmoid(h3), h3
+                        h1 = lrelu(self.d_bn2(conv2d(h0, s2, k_h=5, k_w=5, d_h=2, d_w=2, name='d_h1_conv'), train=self.is_trainning))
+
+                        h2 = lrelu(self.d_bn3(conv2d(h1, s3, k_h=3, k_w=3, d_h=2, d_w=2, name='d_h2_conv'), train=self.is_trainning))
+
+                        h3 = lrelu(self.d_bn4(conv2d(h2, s2, k_h=3, k_w=3, d_h=2, d_w=2, name='d_h3_conv'), train=self.is_trainning))
+
+                        sz = h3.get_shape().as_list()
+                        h3 = tf.reshape(h3, [self.batch_size, int(sz[1] * sz[2] * sz[3])])
+
+                        h4 = linear(h3, 1, 'd_h4_lin')
+
+                        return tf.nn.sigmoid(h4), h4
 
         def generator(self, z, y=None):
                 """
                 Create the generator
                 This creates a string of layers:
-                - input - [N, 100]
-                - concatenate conditioning - [N, 110]
-                - linear layer with 1024 output neurons - [N, 1024]
-                - batch norm - [N, 1024]
-                - relu - [N, 1024]
-                - concatenate conditioning - [N, 1034]
-                - linear layer with 7*7*128=6272 output neurons - [N, 6272]
-                - reshape 7x7 feature maps - [N, 7, 7, 128]
-                - concatenate conditioning - [N, 7, 7, 138]
-                - transpose convolution with 128 filters and stride 2 - [N, 14, 14, 128]
-                - batch norm - [N, 14, 14, 128]
-                - relu - [N, 14, 14, 128]
-                - concatenate conditioing - [N, 14, 14, 138]
-                - transpose convolution with 1 filter and stride 2 - [N, 28, 28, 1]
+                - input - [N, 41, 200,  1]
+                - concatenate conditioning - [N, 41, 200, 2]
+                - conv layer with  5x5 kernels and 1x1 stride - [N, 41, 200, 128]
+                - batch norm - [N, 41, 200, 128]
+                - relu - [N, 41, 200, 128]
+                - concatenate conditioning - [N, 41, 200, 129]
+                - conv layer with  5x5 kernels and 1x1 stride - [N, 41, 200, 256]
+                - batch norm - [N, 41, 200, 256]
+                - relu - [N, 41, 200, 256]
+                - concatenate conditioning - [N, 41, 200, 257]
+                - conv layer with  5x5 kernels and 1x1 stride - [N, 41, 200, 128]
+                - batch norm - [N, 41, 200, 128]
+                - relu - [N, 41, 200, 128]
+                - conv layer with  5x5 kernels and 1x1 stride - [N, 41, 200, 1]
                 """
-                with tf.variables_scope('generator') as scope:
+                with tf.variable_scope('generator') as scope:
 
-                        s = self.output_size
-                        s2, s4 = int(s/2), int(s/4)
+                        sz = z.get_shape().as_list()
+                        s1, s2, s3 = int(self.gf_dim), int(self.gf_dim * 2), int(self.gf_dim)
 
-                        yb = tf.reshpae(y, [self.batch_size, 1, 1, self.y_dim])
-                        z = tf.concnat(1, [z, y])
+                        z = tf.concat([z, y], sz[-1])
 
-                        h0 = tf.nn.relu(self.g_bn0(linear(z, self.gfc_dim, 'g_h0_lin'), train=self.is_tranning))
-                        h0 = tf.concat(1, [h0, y])
+                        h0 = tf.nn.relu(self.g_bn0(conv2d(z, s1, k_h=5, k_w=5, d_h=1, d_w=1, name='g_h0_conv'), train=self.is_trainning))
+                        h0 = tf.concat([h0, y], sz[-1])
 
-                        h1 = tf.nn.relu(self.g_bn1(linear(h0, self.gf_dim*2*s4*s4, 'g_h1_lin'), train=self.is_trainning))
-                        h1 = tf.reshape(h1, [self.batch_size, s4, s4, self.gf_dim * 2])
+                        h1 = tf.nn.relu(self.g_bn1(conv2d(h0, s2, k_h=5, k_w=5, d_h=1, d_w=1, name='g_h1_conv'), train=self.is_trainning))
+                        h1 = tf.concat([h1, y], sz[-1])
 
-                        h1 = conv_cond_concat(h1, yb)
+                        h2 = tf.nn.relu(self.g_bn2(conv2d(h1, s3, k_h=5, k_w=5, d_h=1, d_w=1, name='g_h2_conv'), train=self.is_trainning))
 
-                        h2 = tf.nn.relu(self.g_bn2(deconv2d(h1, [self.batch_size, s2, s2, self.gf_dim * 2], name='g_h2'), train=self.is_training))
-                        h2 = conv_cond_concat(h2, yb)
+                        h3 = conv2d(h2, 1, k_h=5, k_w=5, d_h=1, d_w=1, name='g_h3_conv')
 
-                        return tf.nn.sigmoid(deconv2d(h2, [self.batch_size, s, s, self.c_dim], name='g_h3'))
+                        return h3

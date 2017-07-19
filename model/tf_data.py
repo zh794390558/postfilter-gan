@@ -344,8 +344,8 @@ class TFRecordsLoader(LoaderFactory):
                         serialized_example,
                         # Defaults are not specified since both keys are required.
                         features={
-                                'image_raw': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # x data
-                                'label': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # y condition
+                                'image_raw': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # x data, nat_features
+                                'label': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # y condition, gen_features
                         })
 
                 d = features['image_raw']

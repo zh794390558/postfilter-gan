@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import datetime
 import inspect
+import time
 import logging
 import math
 import numpy as np
@@ -13,9 +14,11 @@ import tensorflow as tf
 from tensorflow.python.ops import template
 
 import utils
+import ops
 from base import Model, Tower
 from utils import model_property
 import tf_data
+import lr_policy
 
 # Constants
 TF_INTRA_OP_THREADS = 0
@@ -128,7 +131,7 @@ def main(_):
                 # Set Tensorboard log directory
                 if FLAGS.summaries_dir:
                         # The following gives a nice but unrobust timestamp
-                        FLAGS.summaries_dir = os.path.join(FLAGS.summaries_dir, datetime.datetime.now().strftime('%Y%m%d_%H$M$S'))
+                        FLAGS.summaries_dir = os.path.join(FLAGS.summaries_dir, datetime.datetime.now().strftime('%Y%m%d_%H%M%S'))
 
                 if not FLAGS.train_db and not FLAGS.validation_db and not FLAGS.inference_db:
                         logging.error("At least one of the following file sources should be specified: "
@@ -234,7 +237,7 @@ def main(_):
                 else:
                         logging.error('Unknown save_var flag ({})'.format(FLAGS.save_vars))
                         exit(-1)
-                saver = tf.train.Saver(vars_to_save, max_to_keep=0, shareded=FALGS.serving_export)
+                saver = tf.train.Saver(vars_to_save, max_to_keep=0, sharded=FLAGS.serving_export)
 
                 # Initialize variables
                 init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
@@ -246,7 +249,7 @@ def main(_):
 
 
                 # Tensorboard: Merge all the summaries and write them out
-                writer = tf.train.SummaryWriter(os.path.join(FLAGS.summaries_dir, 'tb'), sess.graph)
+                writer = ops.SummaryWriter(os.path.join(FLAGS.summaries_dir, 'tb'), sess.graph)
 
                 # If we are inferencing , only do that
                 if FLAGS.inference_db:
@@ -254,8 +257,9 @@ def main(_):
                         Inference(sess, inf_model)
 
                 queue_size_op = []
-                for n in tf.get_default_grpah().as_graph_def().node:
+                for n in tf.get_default_graph().as_graph_def().node:
                         if '_Size' in n.name:
+                                logging.debug('graph node name: {}'.format(n.name))
                                 queue_size_op.append(n.name+':0')
 
                 start = time.time()
@@ -265,7 +269,7 @@ def main(_):
                         val_model.start_queue_runners(sess)
                         Validation(sess, val_model, 0)
 
-                if FLAGS.tarin_db:
+                if FLAGS.train_db:
                         # During training, a log output should occur at least X times per epoch or every X images, whichever lower
                         train_steps_per_epoch = train_model.dataloader.get_total() / batch_size_train
                         if math.ceil(train_steps_per_epoch / MIN_LOGS_PER_TRAIN_EPOCH) < math.ceil(5000 / batch_size_train):
@@ -286,14 +290,14 @@ def main(_):
                 logging.info("While logging, epoch value will be rounded to %s significant digits", epoch_round)
 
                 # Create the learning rate policy
-                toatl_training_steps = train_model.dataload.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size
+                total_trainning_steps = train_model.dataloader.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size
 
-                lrpolicy  = lr_policy.LRPolicy(FALGS.lr_policy,
-                                                FALGS.lr_base_rate,
-                                                FALGS.lr_gamma,
-                                                FALGS.lr_power,
-                                                total_trainning_steps,
-                                                FALGS.lr_stepvalues)
+                lrpolicy  = lr_policy.LRPolicy(FLAGS.lr_policy,
+                                               FLAGS.lr_base_rate,
+                                               FLAGS.lr_gamma,
+                                               FLAGS.lr_power,
+                                               total_trainning_steps,
+                                               FLAGS.lr_stepvalues)
                 train_model.start_queue_runners(sess)
 
                 # Trainnig
@@ -304,7 +308,7 @@ def main(_):
                         step = 0
                         step_last_log = 0
                         print_vals_sum = 0
-                        while not train_model.queue_coord.shout_stop():
+                        while not train_model.queue_coord.should_stop():
                                 log_runtime = FLAGS.log_runtime_stats_per_step and (step % FLAGS.log_runtime_stats_per_step == 0)
 
                                 run_options = None

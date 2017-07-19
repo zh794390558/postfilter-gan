@@ -2,3 +2,4 @@ data
 .nfs*
 *.pyc
 *.swp
+log/
