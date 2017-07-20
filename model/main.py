@@ -92,6 +92,9 @@ tf.app.flags.DEFINE_integer(
     'log_runtime_stats_per_step', 0,
     """Logs runtime statistics for Tensorboard every x steps, defaults to 0 (off).""")
 
+def dump(obj):
+    for attr in dir(obj):
+        print("obj.%s = %s" % (attr, getattr(obj, attr)))
 
 def load_snapshot(sess, weight_path, var_candidates):
         """
@@ -116,6 +119,36 @@ def load_snapshot(sess, weight_path, var_candidates):
         logging.info('Restoring {} variable ops.'.format(len(vars_restore)))
         tf.train.Saver(vars_restore, max_to_keep=0, shared=FLAGS.serving_export).restore(sess, weight_path)
         logging.info('Variables restored.')
+
+def save_snapshot(sess, saver, save_dir, snapshot_prefix, epoch, for_serving=False):
+    """
+    Saves a snapshot of the current session, saving all variables previously defined
+    in the ctor of the saver. Also saves the flow of the graph itself (only once).
+    """
+    number_dec = str(FLAGS.snapshotInterval-int(FLAGS.snapshotInterval))[2:]
+    if number_dec is '':
+       number_dec = '0'
+    epoch_fmt = "{:." + number_dec + "f}"
+
+    snapshot_file = os.path.join(save_dir, snapshot_prefix + '_' + epoch_fmt.format(epoch) + '.ckpt')
+
+    logging.info('Snapshotting to %s', snapshot_file)
+    saver.save(sess, snapshot_file)
+    logging.info('Snapshot saved.')
+
+    if for_serving:
+        # @TODO(tzaman) : we could further extend this by supporting tensorflow-serve
+        logging.error('NotImplementedError: Tensorflow-Serving support.')
+        exit(-1)
+
+    # Past this point the graph shouldn't be changed, so saving it once is enough
+    filename_graph = os.path.join(save_dir, snapshot_prefix + '.graph_def')
+    if not os.path.isfile(filename_graph):
+        with open(filename_graph, 'wb') as f:
+            logging.info('Saving graph to %s', filename_graph)
+            f.write(sess.graph_def.SerializeToString())
+            logging.info('Saved graph to %s', filename_graph)
+        # meta_graph_def = tf.train.export_meta_graph(filename='?')
 
 
 def loadLabels(filename):
@@ -356,13 +389,12 @@ def main(_):
                                         last_snapshot_save_epoch = current_epoch
                                 writer.flush()
                 except tf.errors.OutOfRangeError:
-                        logging.info('Done training for epochs: tf.errors.OutOfRangeError')
+                        logging.info('Done training for epochs limit reached: tf.errors.OutOfRangeError')
                 except ValueError as err:
                         logging.error(err.args[0])
                         exit(-1)
                 except (KeyboardInterrupt):
                         logging.info('Interrupt signal received.')
-
 
                         # If required, perform final snapshot save
                         if FLAGS.snapshotInterval > 0 and FLAGS.epoch > last_snapshot_save_epoch:
@@ -374,6 +406,7 @@ def main(_):
                 if FLAGS.validation_db and current_epoch >= next_validation:
                     Validation(sess, val_model, current_epoch)
 
+                # Close and terminate the quques
                 if FLAGS.train_db:
                     del train_model
                 if FLAGS.validation_db:

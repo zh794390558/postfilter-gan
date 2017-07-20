@@ -281,15 +281,18 @@ class UserModel(Tower):
                 with tf.variable_scope('generator') as scope:
 
                         sz = z.get_shape().as_list()
+                        channel_dim = len(sz) - 1
                         s1, s2, s3 = int(self.gf_dim), int(self.gf_dim * 2), int(self.gf_dim)
 
-                        z = tf.concat([z, y], sz[-1])
+                        logging.debug('z shape {}, y shape {}'.format(z.get_shape(), y.get_shape()))
+                        z = tf.concat([z, y], channel_dim)
+                        logging.debug('z shape {}'.format(z.get_shape()))
 
                         h0 = tf.nn.relu(self.g_bn0(conv2d(z, s1, k_h=5, k_w=5, d_h=1, d_w=1, name='g_h0_conv'), train=self.is_trainning))
-                        h0 = tf.concat([h0, y], sz[-1])
+                        h0 = tf.concat([h0, y], channel_dim)
 
                         h1 = tf.nn.relu(self.g_bn1(conv2d(h0, s2, k_h=5, k_w=5, d_h=1, d_w=1, name='g_h1_conv'), train=self.is_trainning))
-                        h1 = tf.concat([h1, y], sz[-1])
+                        h1 = tf.concat([h1, y], channel_dim)
 
                         h2 = tf.nn.relu(self.g_bn2(conv2d(h1, s3, k_h=5, k_w=5, d_h=1, d_w=1, name='g_h2_conv'), train=self.is_trainning))
 

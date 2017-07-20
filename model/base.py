@@ -196,7 +196,7 @@ class Model(object):
                         apply_gradient_ops = []
                         for grad_avg in grad_averages:
                                 apply_gradient_ops.append(self.optimizer.apply_gradients(grad_avg, global_step=self.global_step))
-
+                        self._train = apply_gradient_ops
 
         def start_queue_runners(self, sess):
                 logging.info('Starting queue runners ({})'.format(self.stage))

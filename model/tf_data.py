@@ -200,8 +200,10 @@ class LoaderFactory(object):
                         single_key , single_data, single_data_shape, single_label, single_label_shape = \
                                 self.get_single_data(key_queue)
 
-                single_data_shape = tf.reshape(single_data_shape, [3]) # Shape the shape to have three dimensions
+                logging.debug('single shape {}'.format(single_data_shape))
+                single_data_shape = np.reshape(single_data_shape, [3]) # Shape the shape to have three dimensions
                 single_data = self.reshape_decode(single_data, single_data_shape)
+                logging.debug('single data shape {} ({})'.format(single_data.get_shape(), single_data_shape))
 
 
                 if self.labels_db_path:  # Using a seperate label db; label can be anything
@@ -211,7 +213,7 @@ class LoaderFactory(object):
                         # single_label = tf.reshape(single_label, [])
 
                         # using as conditon of DCGAN, which shape is same to data
-                        single_label_shape = tf.reshape(single_label_shape, [3])
+                        single_label_shape = np.reshape(single_label_shape, [3])
                         single_label = self.reshape_decode(single_label, single_label_shape)
 
                 # Mean Subtraction
@@ -323,6 +325,8 @@ class TFRecordsLoader(LoaderFactory):
                 else:
                         self.data_encoded = False
 
+                logging.debug('Example - shape({},{},{}), data_encoded={}'.format(self.height, self.width, self.channels, self.data_encoded))
+
                 # Set up the reader
                 self.reader = tf.TFRecordReader(name='tfrecord_reader')
 
@@ -344,13 +348,16 @@ class TFRecordsLoader(LoaderFactory):
                         serialized_example,
                         # Defaults are not specified since both keys are required.
                         features={
-                                'image_raw': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # x data, nat_features
-                                'label': tf.FixedLenFeature([self.height, self.width, self.channels], tf.float32), # y condition, gen_features
+                                'image_raw': tf.FixedLenFeature([self.height * self.width * self.channels], tf.float32), # x data, nat_features
+                                'label': tf.FixedLenFeature([self.height * self.width * self.channels], tf.float32), # y condition, gen_features
                         })
 
                 d = features['image_raw']
                 ds = np.array([self.height, self.width, self.channels], dtype=np.int32)
+                logging.debug('image_raw: {}'.format(d.shape))
+
                 l = features['label']
                 ls = np.array([self.height, self.width, self.channels], dtype=np.int32)
+                logging.debug('label: {}'.format(l.shape))
                 return key, d, ds, l, ls
 
