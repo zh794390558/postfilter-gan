@@ -2,13 +2,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import time
 import logging
+from pprint import pprint
+import tensorflow as tf
+from tensorflow.python.framework import ops
+
 import utils
 import tf_data
 from  ops  import scalar_summary
 from utils import model_property
-import tensorflow as tf
-from tensorflow.python.framework import ops
 
 logging.basicConfig(format='%(asctime)s %(filename)s [line:%(llineno)d] [%(levelname)s] %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -40,20 +43,27 @@ def average_gradients(tower_grads):
            tower_grads: List of lists of (gradient, variable) tuples. The outer list
            is over individual gradients. The inner list is over the gradient
            calculation for each tower.
-                [ [(grad0_gpu0, var0_gpu0), ..., (gradM_gpu0, varM_gpu0)],
-                  [(grad0_gpu1, var0_gpu1), ..., (gradM_gpu1, varM_gpu1)],
-                  ...                       ...                      ...
-                  [(grad0_gpuN, var0_gpuN), ..., (gradM_gpuN, varM_gpuN)] ]
+		[[(grad0_gpu0, var0_gpu0), ..., (gradM_gpu0, gradM_gpu0)]
+		 [(grad0_gpu1, var0_gpu1), ..., (gradM_gpu1, gradM_gpu1)]
+		 ...
+		 [(grad0_gpuN, var0_gpuN), ..., (gradM_gpuN, gradM_gpuN)]
+		]
+
+	   first axis is tower index;
+	   second axis is grad_var.
         Returns:
             List of pairs of (gradient, variable) where the gradient has been averaged
             across all towers.
         """
-        pprint(towr_grads[0][:])
+        #pprint(tower_grads[0][:])
+        #pprint(tower_grads[1][:])
 
         with tf.name_scope('gradient_average'):
                 average_grads = []
                 for grad_and_vars in zip(*tower_grads):
-                        pprint(grad_and_vars[:][0])
+                        #pprint(grad_and_vars)
+			#time.sleep(10)
+
                         # Note that eatch grad_and_vars looks like the following:
                         # ((grad0_gpu0, var0_gpu0), ..., (grad0_gpuN, var0_gpuN))
                         grads = []
@@ -63,7 +73,7 @@ def average_gradients(tower_grads):
                                 # Append on a 'tower' dimension which we will average over below
                                 grads.append(expanded_g)
                         # Average over the 'tower' dimension.
-                        grad = tf.concat(0, grads)
+                        grad = tf.concat(axis=0, values=grads)
                         grad = tf.reduce_mean(grad, 0)
                         # Keep in mind that the Variabels are redundant because they are shared
                         # across towers. So .. we will just return the first tower's pointer to
@@ -115,6 +125,8 @@ class Model(object):
                 else:
                         assert self.stage == utils.STAGE_INF
                         batch_x = batch_x
+
+                logging.debug('batch_x shape={} batch_y shape={}'.format(batch_x.get_shape().as_list(), batch_y.get_shape().as_list()))
 
                 available_devices = utils.get_available_gpus()
                 logging.debug('GPUs {}'.format(available_devices))

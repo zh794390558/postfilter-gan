@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  name: gang
+spec:
+  affinity: {}
+  containers:
+  - args:
+    - echo 'hello';sleep 20d
+    command:
+    - /bin/bash
+    - -c
+    image: harbor.ail.unisound.com/zhanghui/tensorflow-gpu-1.2.1:latest 
+    ports:
+    - containerPort: 6006
+      protocol: TCP
+    - containerPort: 8888
+      protocol: TCP
+    imagePullPolicy: Always 
+    name: gan-gpu 
+    resources:
+      limits:
+        alpha.kubernetes.io/nvidia-gpu: "2"
+    volumeMounts:
+    - mountPath: /gfs
+      name: nfs0
+    - mountPath: '/tmp'
+      name: hostpath1
+    - mountPath: /usr/local/nvidia/lib64
+      name: nvidia-libs-volume
+    - mountPath: /usr/local/nvidia/bin
+      name: nvidia-libs-tool
+  dnsPolicy: ClusterFirst
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 1
+  volumes:
+  - name: nfs0
+    nfs:
+      path: /volume1/gfs
+      server: 10.10.10.251
+  - hostPath:
+      path: /tmp
+    name: hostpath1
+  - hostPath:
+      path: /usr/local/nvidia/lib64
+    name: nvidia-libs-volume
+  - hostPath:
+      path: /usr/local/nvidia/bin
+    name: nvidia-libs-tool
+

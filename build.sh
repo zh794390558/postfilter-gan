@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x 
+set -x
 
 if [[ $# < 1 ]]; then
 	echo 'usage: make [gpu|cpu]'

@@ -20,7 +20,7 @@ import struct
 import logging
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.INFO)
+                    level=logging.WARN)
 
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))

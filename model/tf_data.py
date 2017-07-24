@@ -234,6 +234,8 @@ class LoaderFactory(object):
                 max_queue_capacity = min(math.ceil(self.total * MIN_FRACTION_OF_EXMPLES_IN_QUEUE),
                                         MAX_ABSOLUTE_EXAMLES_IN_QUEUE)
 
+                logging.debug('batcher queue capacity={}'.format(max_queue_capacity))
+
                 single_batch = [single_key, single_data]
                 if single_label is not None:
                         single_batch.append(single_label)
