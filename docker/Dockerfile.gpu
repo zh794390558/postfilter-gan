@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest 
+FROM tensorflow/tensorflow:1.2.1-gpu
 
 COPY sources.list /etc/apt
 RUN groupadd -f -g 800  zhanghui && \
