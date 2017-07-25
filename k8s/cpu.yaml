@@ -2,7 +2,18 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: gan
+  labels: 
+     name: post-gan
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: alpha.kubernetes.io/nvidia-gpu-name
+            operator: In
+            values:
+            - 1080Ti
   containers:
   - args:
     - echo 'hello';sleep 20d; true
@@ -14,7 +25,7 @@ spec:
     - containerPort: 6006
       protocol: TCP
     imagePullPolicy: Always 
-    name: gan 
+    name: gan-cpu 
     volumeMounts:
     - mountPath: /gfs
       name: nfs0

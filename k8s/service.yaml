@@ -3,12 +3,12 @@ kind: Service
 metadata:
   name: gan-service
   labels:
-    name: gan
+    name: post-gan
     role: service
 spec:
     type: NodePort
     selector:
-      name: gan 
+      name: post-gan 
     ports:
       - port: 80 
         targetPort: 6006 
