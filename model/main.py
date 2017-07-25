@@ -12,6 +12,7 @@ import os
 from six.moves import xrange
 import tensorflow as tf
 from tensorflow.python.ops import template
+from tensorflow.core.framework import summary_pb2
 
 import utils
 import ops
@@ -155,6 +156,88 @@ def loadLabels(filename):
     with open(filename) as f:
         return f.readlines()
 
+def average_head_keys(tags, vals):
+    '''
+    Averages keys with same end (head) name.
+    Example: foo1/bar=1 and foo2/bar=2 should collapse to bar=1.5
+    '''
+    tail_tags = [w.split('/')[-1] for w in tags]
+    sums = {}
+    nums = {}
+    for a, b in zip(tail_tags, vals):
+        if a not in sums:
+            sums[a] = b
+            nums[a] = 1
+        else:
+            sums[a] += b
+            nums[a] += 1
+    tags_clean = sums.keys()
+    return tags_clean, np.asarray(sums.values()) / np.asarray(nums.values())
+
+def summary_to_lists(summary_str):
+    """ Takes a Tensorflow stringified Summary object and returns only
+        the scalar values to a list of tags and a list of values
+        Args:
+             summary_str: string of a Tensorflow Summary object
+        Returns:
+             tags: list of tags
+             vals: list of values corresponding to the tag list
+    """
+    summ = summary_pb2.Summary()
+    summ.ParseFromString(summary_str)
+    tags = []
+    vals = []
+    for s in summ.value:
+        if s.HasField('simple_value'):  # and s.simple_value: # Only parse scalar_summaries
+            if s.simple_value == float('Inf') or np.isnan(s.simple_value):
+                raise ValueError('Model diverged with {} = {} : \
+                        Try decreasing your learning rate'.format(s.tag, s.simple_value))
+
+            tags.append(s.tag)
+            vals.append(s.simple_value)
+    tags, vals = average_head_keys(tags, vals)
+    vals = np.asarray(vals)
+    return tags, vals
+
+def print_summarylist(tags, vals):
+        """ Prints a nice one-line listing of tags and their values in a nice format
+            that corresponds to how the DIGITS regex reads it.
+            Args:
+                tags: an array of tags
+                vals: an array of values
+            Returns:
+                print_list: a string containing formatted tags and values
+        """
+        print_list = ''
+        for i, key in enumerate(tags):
+            if vals[i] == float('Inf'):
+                raise ValueError('Infinite value {} = Inf'.format(key))
+            print_list = print_list + key + " = " + "{:.6f}".format(vals[i])
+            if i < len(tags) -1:
+                print_list = print_list + ", "
+        return print_list
+
+
+def Validation(sess, model, current_epoch):
+    '''
+    Runs one validataion epoch.
+    '''
+    # @TODO(): utilize the coordinator by resetting the queue after 1 epoch.
+    # see https://github.com/tensorflow/tensorflow/issues/4535#issuecomment-248990633
+
+    print_vals_sum = 0
+    steps = 0
+    while (steps * model.dataloader.batch_size) < model.dataloader.get_total():
+        summary_str = sess.run(model.summary)
+        # Parse the summary
+        tags, print_vals = summary_to_lists(summary_str)
+        print_vals_sum = print_vals + print_vals_sum
+        steps += 1
+
+    print_list = print_summarylist(tags, print_vals_sum/steps)
+    logging.info("Validation (epoch " + str(current_epoch) + "): " + print_list)
+
+
 def main(_):
         # Always keep the cpu as default
         with tf.Graph().as_default(), tf.device('/cpu:0'):
@@ -234,7 +317,7 @@ def main(_):
 
                 if FLAGS.validation_db:
                         with tf.name_scope(utils.STAGE_VAL) as stage_scope:
-                                val_model = Model(utils.STAGE_VAL, FLAGS.croplen, nclasses)
+                                val_model = Model(utils.STAGE_VAL, FLAGS.croplen, nclasses, reuse_variable=True)
                                 val_model.create_dataloader(FLAGS.validation_db)
                                 val_model.dataloader.setup(FLAGS.validation_labels,
                                                            False,
@@ -303,102 +386,102 @@ def main(_):
                         Validation(sess, val_model, 0)
 
                 if FLAGS.train_db:
-                        # During training, a log output should occur at least X times per epoch or every X images, whichever lower
-                        train_steps_per_epoch = train_model.dataloader.get_total() / batch_size_train
-                        if math.ceil(train_steps_per_epoch / MIN_LOGS_PER_TRAIN_EPOCH) < math.ceil(5000 / batch_size_train):
-                                logging_interval_step = int(math.ceil(train_steps_per_epoch / MIN_LOGS_PER_TRAIN_EPOCH))
-                        else:
-                                logging_interval_step = int(math.ceil(5000/batch_size_train))
-                        logging.info("During training. details will be logged after every %s steps (batches)",
-                                      logging_interval_step)
+                    # During training, a log output should occur at least X times per epoch or every X images, whichever lower
+                    train_steps_per_epoch = train_model.dataloader.get_total() / batch_size_train
+                    if math.ceil(train_steps_per_epoch / MIN_LOGS_PER_TRAIN_EPOCH) < math.ceil(5000 / batch_size_train):
+                            logging_interval_step = int(math.ceil(train_steps_per_epoch / MIN_LOGS_PER_TRAIN_EPOCH))
+                    else:
+                            logging_interval_step = int(math.ceil(5000/batch_size_train))
+                    logging.info("During training. details will be logged after every %s steps (batches)",
+                                  logging_interval_step)
 
 
-                 # epoch value will be calculated for every batch size. To maintain unique epoch value between batches,
-                 # it needs to be rounded to the required number of significant digits.
-                epoch_round = 0  # holds the required number of significant digits for round function.
-                tmp_batchsize = batch_size_train * logging_interval_step
-                while tmp_batchsize <= train_model.dataloader.get_total():
-                        tmp_batchsize = tmp_batchsize * 10
-                        epoch_round += 1
-                logging.info("While logging, epoch value will be rounded to %s significant digits", epoch_round)
+                     # epoch value will be calculated for every batch size. To maintain unique epoch value between batches,
+                     # it needs to be rounded to the required number of significant digits.
+                    epoch_round = 0  # holds the required number of significant digits for round function.
+                    tmp_batchsize = batch_size_train * logging_interval_step
+                    while tmp_batchsize <= train_model.dataloader.get_total():
+                            tmp_batchsize = tmp_batchsize * 10
+                            epoch_round += 1
+                    logging.info("While logging, epoch value will be rounded to %s significant digits", epoch_round)
 
-                # Create the learning rate policy
-                total_trainning_steps = train_model.dataloader.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size
+                    # Create the learning rate policy
+                    total_trainning_steps = train_model.dataloader.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size
 
-                lrpolicy  = lr_policy.LRPolicy(FLAGS.lr_policy,
-                                               FLAGS.lr_base_rate,
-                                               FLAGS.lr_gamma,
-                                               FLAGS.lr_power,
-                                               total_trainning_steps,
-                                               FLAGS.lr_stepvalues)
-                train_model.start_queue_runners(sess)
+                    lrpolicy  = lr_policy.LRPolicy(FLAGS.lr_policy,
+                                                   FLAGS.lr_base_rate,
+                                                   FLAGS.lr_gamma,
+                                                   FLAGS.lr_power,
+                                                   total_trainning_steps,
+                                                   FLAGS.lr_stepvalues)
+                    train_model.start_queue_runners(sess)
 
-                # Trainnig
-                logging.info('Started training the model')
+                    # Trainnig
+                    logging.info('Started training the model')
 
-                current_epoch = 0
-                try:
-                        step = 0
-                        step_last_log = 0
-                        print_vals_sum = 0
-                        while not train_model.queue_coord.should_stop():
-                                log_runtime = FLAGS.log_runtime_stats_per_step and (step % FLAGS.log_runtime_stats_per_step == 0)
+                    current_epoch = 0
+                    try:
+                            step = 0
+                            step_last_log = 0
+                            print_vals_sum = 0
+                            while not train_model.queue_coord.should_stop():
+                                    log_runtime = FLAGS.log_runtime_stats_per_step and (step % FLAGS.log_runtime_stats_per_step == 0)
 
-                                run_options = None
-                                run_metadata = None
-                                if log_runtime:
-                                        # For a HARDWARE_TRACE you need NVIDIA CUPTI, a 'CUDA-EXTRA'
-                                        # SOFTWARE_TRACE HARDWARE_TRACE FULL_TRACE
-                                        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-                                        run_metadata = tf.RunMetadata()
+                                    run_options = None
+                                    run_metadata = None
+                                    if log_runtime:
+                                            # For a HARDWARE_TRACE you need NVIDIA CUPTI, a 'CUDA-EXTRA'
+                                            # SOFTWARE_TRACE HARDWARE_TRACE FULL_TRACE
+                                            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+                                            run_metadata = tf.RunMetadata()
 
-                                feed_dict = {train_model.learning_rate: lrpolicy.get_learning_rate(step)}
-
-
-                                _, summary_str, step = sess.run([train_model.train,
-                                                                train_model.summary,
-                                                                train_model.global_step],
-                                                                feed_dict=feed_dict,
-                                                                options=run_options,
-                                                                run_metadata=run_metadata)
-
-                                step = step / len(train_model.train)
+                                    feed_dict = {train_model.learning_rate: lrpolicy.get_learning_rate(step)}
 
 
-                                if log_runtime:
-                                        writer.add_run_metadata(run_metadata, str(step))
+                                    _, summary_str, step = sess.run([train_model.train,
+                                                                    train_model.summary,
+                                                                    train_model.global_step],
+                                                                    feed_dict=feed_dict,
+                                                                    options=run_options,
+                                                                    run_metadata=run_metadata)
 
-                                writer.add_summary(summary_str, step)
+                                    step = step / len(train_model.train)
 
-                                current_epoch = round((step * batch_size_train) / train_model.dataloader.get_total(), epoch_round)
 
-                                # Potential Validation Pass
-                                if FLAGS.validation_db and current_epoch >= next_validation:
-                                        Validation(sess, val_model, current_epoch)
-                                        # Find next nearest epoch value that exactly divisible by FLAGS.validation_interval:
-                                        next_validation = (round(float(current_epoch)/FLAGS.validation_interval) + 1) * \
-                                                            FLAGS.validation_interval
+                                    if log_runtime:
+                                            writer.add_run_metadata(run_metadata, str(step))
 
-                                 # Saving Snapshot
-                                if FLAGS.snapshotInterval > 0 and current_epoch >= next_snapshot_save:
-                                        save_snapshot(sess, saver, FLAGS.save, snapshot_prefix, current_epoch, FLAGS.serving_export)
+                                    writer.add_summary(summary_str, step)
 
-                                        # To find next nearest epoch value that exactly divisible by FLAGS.snapshotInterval
-                                        next_snapshot_save = (round(float(current_epoch)/FLAGS.snapshotInterval) + 1) * \
-                                                            FLAGS.snapshotInterval
-                                        last_snapshot_save_epoch = current_epoch
-                                writer.flush()
-                except tf.errors.OutOfRangeError:
-                        logging.info('Done training for epochs limit reached: tf.errors.OutOfRangeError')
-                except ValueError as err:
-                        logging.error(err.args[0])
-                        exit(-1)
-                except (KeyboardInterrupt):
-                        logging.info('Interrupt signal received.')
+                                    current_epoch = round((step * batch_size_train) / train_model.dataloader.get_total(), epoch_round)
 
-                        # If required, perform final snapshot save
-                        if FLAGS.snapshotInterval > 0 and FLAGS.epoch > last_snapshot_save_epoch:
-                                save_snapshot(sess, saver, FLAGS.save, snapshot_prefix, FLAGS.epoch, FLAGS.serving_export)
+                                    # Potential Validation Pass
+                                    if FLAGS.validation_db and current_epoch >= next_validation:
+                                            Validation(sess, val_model, current_epoch)
+                                            # Find next nearest epoch value that exactly divisible by FLAGS.validation_interval:
+                                            next_validation = (round(float(current_epoch)/FLAGS.validation_interval) + 1) * \
+                                                                FLAGS.validation_interval
+
+                                     # Saving Snapshot
+                                    if FLAGS.snapshotInterval > 0 and current_epoch >= next_snapshot_save:
+                                            save_snapshot(sess, saver, FLAGS.save, snapshot_prefix, current_epoch, FLAGS.serving_export)
+
+                                            # To find next nearest epoch value that exactly divisible by FLAGS.snapshotInterval
+                                            next_snapshot_save = (round(float(current_epoch)/FLAGS.snapshotInterval) + 1) * \
+                                                                FLAGS.snapshotInterval
+                                            last_snapshot_save_epoch = current_epoch
+                                    writer.flush()
+                    except tf.errors.OutOfRangeError:
+                            logging.info('Done training for epochs limit reached: tf.errors.OutOfRangeError')
+                    except ValueError as err:
+                            logging.error(err.args[0])
+                            exit(-1)
+                    except (KeyboardInterrupt):
+                            logging.info('Interrupt signal received.')
+
+                    # If required, perform final snapshot save
+                    if FLAGS.snapshotInterval > 0 and FLAGS.epoch > last_snapshot_save_epoch:
+                            save_snapshot(sess, saver, FLAGS.save, snapshot_prefix, FLAGS.epoch, FLAGS.serving_export)
 
                 print('Training wall-time:', time.time()-start)
 

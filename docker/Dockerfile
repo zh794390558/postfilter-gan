@@ -17,7 +17,7 @@ RUN groupadd -f -g 800  zhanghui && \
     chown zhanghui:zhanghui -R /home/zhanghui/.vim_runtime && \
     sed -i '$a sh ~/.vim_runtime/install_awesome_vimrc.sh' /home/zhanghui/.profile
     
-
+COPY gitconfig /home/zhanghui/.gitconfig
 USER zhanghui
 WORKDIR  /home/zhanghui
 

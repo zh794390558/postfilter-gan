@@ -1,0 +1,21 @@
+[core]
+    editer = vim
+[color]    
+    ui = true
+[push]
+    default = simple
+[alias]
+    co = checkout
+    ci = commit
+    st = status
+    br = branch
+    lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+[http]
+    postBuffer = 524288000
+[credential]
+    helper = cache --timeout=3600
+
+[user]
+email = zhanghui@unisound.com
+name = Hui Zhang
+[https]
