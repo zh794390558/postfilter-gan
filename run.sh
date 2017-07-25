@@ -17,7 +17,7 @@ elif [[ $# == 1 ]]; then
         --lr_base_rate 0.0001 --lr_polcy fixed --save_vars all --summaries_dir log/summaries \
         --noserving_export #--log_device_placement --log_runtime_stats_per_step 2
 
-elif [[ $# == 0 ]]; then
+elif [[ $# < 1 ]]; then
     python /gfs/atlas/zhanghui/postfilter-gan/model/main.py  \
         --batch_size 5 \
         --epoch 2 \

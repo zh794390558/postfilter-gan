@@ -12,7 +12,7 @@ elif [[ $# == 1 ]]; then
 
     # test with 30 examples
     python make_tfrecords.py --examples 30 --save_path data --cfg cfg/postfilter.toml --force-gen
-elif [[ $# < 0 ]]; then
+elif [[ $# < 1 ]]; then
     python make_tfrecords.py --save_path /gfs/atlastts/StandFemale_22K/tfrecords --cfg cfg/postfilter.toml --force-gen
 fi
 

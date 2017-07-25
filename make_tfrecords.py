@@ -23,9 +23,17 @@ try:
     import toml
 except ImportError as e:
     subprocess.check_call('./install.sh')
+    from six.moves import xrange
+    from pprint import pprint
+    from tqdm import tqdm
+    import tensorflow as tf
+    import numpy as np
+    import toml
+
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-                    level = logging.DEBUG # WARN
+                    #level = logging.DEBUG
+                    level = logging.WARN
                     )
 
 def _bytes_feature(value):

@@ -12,3 +12,7 @@
 
 1. [DCGAN](https://github.com/carpedm20/DCGAN-tensorflow/)
 
+# TODO
+
+1. multi-thread for `make_tfrecords.py`
+
