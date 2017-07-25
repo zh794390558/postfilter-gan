@@ -4,23 +4,29 @@ from __future__ import print_function
 from __future__ import division
 from __future__ import absolute_import
 
-from six.moves import xrange
-
-import tensorflow as tf
-import numpy as np
-from  pprint import pprint
+import subprocess
 import argparse
-import toml
 import sys
 import os
 import timeit
 import re
-from  tqdm import tqdm
 import struct
 import logging
+from sklearn.model_selection import train_test_split
+
+try:
+    from six.moves import xrange
+    from pprint import pprint
+    from tqdm import tqdm
+    import tensorflow as tf
+    import numpy as np
+    import toml
+except ImportError as e:
+    subprocess.check_call('./install.sh')
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.WARN)
+                    level = logging.DEBUG # WARN
+                    )
 
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
@@ -64,11 +70,11 @@ class ExtractFeature(object):
         self.binfile = open(filename, 'rb')
 
         self.type_name = type_name
-        self.feature_size = feature_size
+        self.feature_size = feature_size # use 41-mel-cepstrum coefficient
         self.file_len = os.stat(filename).st_size
         self.type_endian = endian
         self.type_format = ExtractFeature.type_names[self.type_name.lower()]
-        self.type_size = struct.calcsize(self.type_format)
+        self.type_size = struct.calcsize(self.type_format) # sizeof(float)
 
     def __del__(self):
         #print('__del__')
@@ -165,20 +171,27 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
                 'image_raw': _floats_feature(gen_list), # nature_features
                 'label': _floats_feature(nat_list)  # gen_features
             }))
-        logging.debug('One Example: {}'.format(example))
+        #logging.debug('One Example: {}'.format(example))
         out_file.write(example.SerializeToString())
 
-def main(opts):
-    if not tf.gfile.Exists(opts.save_path):
-        # make save path if it does not exist
-        tf.gfile.MkDir(opts.save_path)
+
+def prepare_file(filename, opts):
+    '''
+    check output file
+    '''
     # set up the output filepath
-    out_filepath = os.path.join(opts.save_path, opts.out_file)
+    out_path = os.path.join(opts.save_path, filename)
+    if not os.path.exists(out_path):
+        os.mkdir(out_path)
+
+    out_filepath = os.path.join(out_path, filename)
+
     if os.path.splitext(out_filepath)[1] != '.tfrecords':
         out_filepath += '.tfrecords'
     else:
         out_filename, ext = os.path.splitext(out_filepath)
         out_filepath = out_filename + ext
+
     # check if out_file exists and if force flag is set
     if os.path.exists(out_filepath) and not opts.force_gen:
         raise ValueError('ERROR: {} already exists. Set force flag (--force-gen) to'
@@ -187,33 +200,67 @@ def main(opts):
         print('Will overwrite previosly existing tfrecords')
         os.unlink(out_filepath)
 
+    return out_filepath
+
+
+def write_record(out_filename, files, opts):
+    '''
+    out_filename: train, val, test
+    filse: filename list
+    opts: argparser param
+    '''
+    out_filepath = prepare_file(out_filename, opts)
+
+    # TFRecord Writer
+    out_file = tf.python_io.TFRecordWriter(out_filepath)
+
+    #for m, (gen_file, nature_file) in enumerate(files):
+    qbar = tqdm(enumerate(files), total=len(files))
+    for m, (gen_file, nature_file) in qbar:
+        qbar.set_description('Process {}'.format(os.path.basename(gen_file)))
+        encoder_proc(gen_file, nature_file, out_file, opts.feature_size, opts.frames)
+
+    out_file.close()
+
+
+def main(opts):
+    if not tf.gfile.Exists(opts.save_path):
+        # make save path if it does not exist
+        tf.gfile.MkDir(opts.save_path)
+
     with open(opts.cfg) as cfg:
         # read the configureation description
         cfg_desc = toml.loads(cfg.read())
 
         beg_t = timeit.default_timer()
 
-        out_file = tf.python_io.TFRecordWriter(out_filepath)
-
         # process the acustic data now
         for dset_i, (dset_key, dset_val)  in enumerate(cfg_desc.iteritems()):
             print(dset_key)
             print('-' * 50)
+
+            # zip(gen, nature)
             gen_dir = dset_val['gen']
             nature_dir = dset_val['nature']
-            files = [(os.path.join(gen_dir, wav) ,  os.path.join(nature_dir, os.path.splitext(wav)[0] + '.cep'))
+            files = [(os.path.join(gen_dir, wav), os.path.join(nature_dir, os.path.splitext(wav)[0] + '.cep'))
                   for wav in os.listdir(gen_dir)[:opts.examples] if wav.endswith('.mcep')]
 
-            pprint(files[:1])
+            # total dataset
+            logging.debug(files[:1])
             nfiles = len(files)
+            logging.debug('Total files num: {}'.format(nfiles))
 
-            #for m, (gen_file, nature_file) in enumerate(files):
-            qbar = tqdm(enumerate(files), total=nfiles)
-            for m, (gen_file, nature_file) in qbar:
-                qbar.set_description('Process {}'.format(os.path.basename(gen_file)))
-                encoder_proc(gen_file, nature_file, out_file, opts.feature_size, opts.frames)
+            # split: train, val , test dataset
+            files_train, files_test = train_test_split(files, test_size=0.15)
+            files_train, files_val = train_test_split(files_train, test_size=0.15)
+            logging.debug('test data ({}): {}'.format(len(files_test), files_test))
+            logging.debug('train data ({}): {}'.format(len(files_train), files_train))
+            logging.debug('val data  ({}): {}'.format(len(files_val), files_val))
 
-        out_file.close()
+            # write train, val, test TFRecords
+            write_record('train', files_train, opts)
+            write_record('val', files_val, opts)
+            write_record('test', files_test, opts)
 
         end_t = timeit.default_timer() - beg_t
         print('*' * 50)
@@ -223,13 +270,11 @@ def main(opts):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert the set of wavs to TFRecords')
 
-    parser.add_argument('--cfg', type=str, default='cfg/postfilter.cfg',
+    parser.add_argument('--cfg', type=str, default='cfg/postfilter.toml',
                help='File containing the description fo datesets'
                 'to extract the info to make the TFRecords.')
     parser.add_argument('--save_path', type=str, default='data/',
                help='Path to save the dataset')
-    parser.add_argument('--out_file', type=str, default='postfilter.tfrecords',
-                help='Output filename')
     parser.add_argument('--force-gen', dest='force_gen', action='store_true',
                 help='Flag to force overwriting exiting dataset.')
     parser.set_defaults(force_gen=False)

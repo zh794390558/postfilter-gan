@@ -296,6 +296,7 @@ class TFRecordsLoader(LoaderFactory):
                 self.shard_paths = []
                 list_db_files = os.path.join(self.db_path, 'list.txt')
                 self.total = 0
+
                 if os.path.exists(list_db_files):
                         files = [os.path.join(self.db_path, f) for f in open(list_db_files, 'r').read().splitlines()]
                 elif os.path.exists(self.db_path):
@@ -303,6 +304,7 @@ class TFRecordsLoader(LoaderFactory):
                 else:
                         files = [self.db_path]
                 logging.debug('{}: files {}'.format(__file__, files))
+
                 for shard_path in files:
                         # Account for the relative path format in list.txt
                         record_iter = tf.python_io.tf_record_iterator(shard_path)
