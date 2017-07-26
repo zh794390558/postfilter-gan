@@ -240,15 +240,20 @@ class LoaderFactory(object):
                 if single_label is not None:
                         single_batch.append(single_label)
 
+                logging.debug('single_key shape={}, single_data shape={}, single_label shape={}'.format(\
+                        single_key.get_shape().as_list(),
+                        single_data.get_shape().as_list(),
+                        single_label.get_shape().as_list() ))
+
                 if self.backend == 'tfrecords' and self.shuffle:
                         batch = tf.train.shuffle_batch(
                                 single_batch,
                                 batch_size=self.batch_size,
                                 num_threads=NUM_THREADS_DATA_LOADER,
                                 capacity=10 * self.batch_size,       # Max amount that will be loaded and queued
-                                shapes=[[0], self.get_shape(), []], # Only makes sense is dynamic_pad=False , (key, data, label)
+                                shapes=[[], self.get_shape(), self.get_shape()], # Only makes sense is dynamic_pad=False , (key, data, label)
                                 min_after_dequeue=5 * self.batch_size,
-                                allow_amller_final_batch=True, # Happens if total % batch_size != 0
+                                allow_smaller_final_batch=True, # Happens if total % batch_size != 0
                                 name='batcher'
                         )
                 else:

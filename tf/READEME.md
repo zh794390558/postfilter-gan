@@ -96,4 +96,5 @@
  (<tf.Tensor 'train/tower_2/gradients/train/tower_2/discriminator/d_h0_conv/Conv2D_grad/tuple/control_dependency_1:0' shape=(5, 5, 1, 64) dtype=float32>,
   <tf.Variable 'discriminator/d_h0_conv/w:0' shape=(5, 5, 1, 64) dtype=float32_ref>))
 
+## 2017-07-26 03:01:50,301 main.py[line:477] [ERROR] Model diverged with val/tower_0/model/chi_square = nan : Try decreasing your learning rate
 

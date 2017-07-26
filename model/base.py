@@ -186,8 +186,8 @@ class Model(object):
                                 # Assemble all made within this scope so far. The user can add custom
                                 # losses to the utils.GraphKeys.LOSSES collection
                                 losses = tf.get_collection(utils.GraphKeys.LOSSES, scope=scope_tower)
-                                logging.debug('get_collection: graykeys.LOSSES : {}'.format(losses))
-                                logging.debug('get_collection: graykeys.REGULARIZATION_LOSSES : {}'.format(ops.get_collection(ops.GraphKeys.REGULARIZATION_LOSSES, scope=None)))
+                                #logging.debug('get_collection: graykeys.LOSSES : {}'.format(losses))
+                                #logging.debug('get_collection: graykeys.REGULARIZATION_LOSSES : {}'.format(ops.get_collection(ops.GraphKeys.REGULARIZATION_LOSSES, scope=None)))
                                 losses += ops.get_collection(ops.GraphKeys.REGULARIZATION_LOSSES, scope=None)
                                 tower_loss = tf.add_n(losses, name='loss')
 
