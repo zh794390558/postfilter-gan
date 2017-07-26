@@ -20,6 +20,7 @@ from base import Model, Tower
 from utils import model_property
 import tf_data
 import lr_policy
+import json
 
 # Constants
 TF_INTRA_OP_THREADS = 0
@@ -64,6 +65,8 @@ tf.app.flags.DEFINE_string(
 tf.app.flags.DEFINE_string(
     'weights', '', """Filename for weights of a model to use for fine-tuning""")
 tf.app.flags.DEFINE_integer('bitdepth', 8, """Specifies an image's bitdepth""")
+tf.app.flags.DEFINE_boolean(
+            'visualize_inf', False, """Will output weights and activations for an inference job.""")
 
 # learnig rate
 tf.app.flags.DEFINE_float('lr_base_rate', '0.01', """Learning rate""")
@@ -218,6 +221,68 @@ def print_summarylist(tags, vals):
         return print_list
 
 
+def save_weight_visualization(w_names, a_names, w, a):
+        try:
+            import h5py
+        except ImportError:
+            logging.error("Attempt to create HDF5 Loader but h5py is not installed.")
+            exit(-1)
+        fn = os.path.join(FLAGS.save, 'vis.h5')
+        vis_db = h5py.File(fn, 'w')
+        db_layers = vis_db.create_group("layers")
+
+        logging.info('Saving visualization to %s', fn)
+        for i in range(0, len(w)):
+            dset = db_layers.create_group(str(i))
+            dset.attrs['var'] = w_names[i].name
+            dset.attrs['op'] = a_names[i]
+            if w[i].shape:
+                dset.create_dataset('weights', data=w[i])
+            if a[i].shape:
+                dset.create_dataset('activations', data=a[i])
+        vis_db.close()
+
+
+def Inference(sess, model):
+    '''
+    Runs one inference (evaluation) epoch (all the files in the loader)
+    '''
+    inference_op = model.towers[0].inference
+
+    weight_vars = []
+    activation_ops = []
+    if FLAGS.visualize_inf:
+        trainable_weights = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        # Retrace the origin op of each variable
+        for n in tf.get_default_graph().as_graph_def().node:
+            for tw in trainable_weights:
+                tw_name_reader = tw.name.split(':')[0] + '/read'
+            if tw_name_reader in n.input:
+                node_op_name = n.name + ':0'  # @TODO(tzaman) this assumes exactly 1 output - allow to be dynamic!
+                weight_vars.append(tw)
+                activation_ops.append(node_op_name)
+                continue
+
+    try:
+         while not model.queue_coord.should_stop():
+             keys, preds, [w], [a] = sess.run([model.dataloader.batch_k,
+                                               inference_op,
+                                               [weight_vars],
+                                               [activation_ops]])
+
+             if FLAGS.visualize_inf:
+                 save_weight_visualization(weight_vars, activation_ops, w, a)
+
+             for i in range(len(keys)):
+                 #    for j in range(len(preds)):
+                 # We're allowing multiple predictions per image here. DIGITS doesnt support that iirc
+                 logging.info('Predictions for image ' + str(model.dataloader.get_key_index(keys[i])) +
+                              ': ' + json.dumps(preds[i].tolist()))
+
+    except tf.errors.OutOfRangeError:
+        print('Done: tf.errors.OutOfRangeError')
+
+
 def Validation(sess, model, current_epoch):
     '''
     Runs one validataion epoch.
@@ -329,7 +394,7 @@ def main(_):
 
                 if FLAGS.inference_db:
                         with tf.name_scope(utils.STAGE_INF) as stage_scope:
-                                inf_model = Model(utils.STAGE_INF, FLAGS.corplen, nclasses)
+                                inf_model = Model(utils.STAGE_INF, FLAGS.croplen, nclasses)
                                 inf_model.create_dataloader(FLAGS.inference_db)
                                 inf_model.dataloader.setup(None, False, FLAGS.bitdepth, FLAGS.batch_size, 1, FLAGS.seed)
                                 inf_model.create_model(UserModel, stage_scope)

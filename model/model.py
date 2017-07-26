@@ -31,7 +31,7 @@ class UserModel(Tower):
                 - self.is_training: whether this is a training graph
                 - self.is_inference: whether this graph is created for inference/testing
                 - self.x: input node. Shape: [N, H, W, C]
-                - self.y: label. Shape: [N] for scalar labels, [N, H, W, C] otherwise.
+                - self.y: label, conditonal variable. Shape: [N] for scalar labels, [N, H, W, C] otherwise.
                 Only defined if self._is_training is True
                 """
 
@@ -47,7 +47,6 @@ class UserModel(Tower):
                 '''
                 # inference op is the output of the generator
                 return self.G
-
 
         @model_property
         def loss(self):
@@ -127,11 +126,11 @@ class UserModel(Tower):
                         # self.y is a vector of labels - shape: [N, H, W, C], SYN features
 
                         # sample z from a normal distribution - shape: [N, H, W, C]
-                        self.z = tf.random_normal(shape=[self.batch_size, self.image_height, self.image_width, self.c_dim], dtype=tf.float32, seed=None, name='z')
+                        self.z = tf.random_normal(shape=[self.batch_size, self.image_height, self.image_width, self.z_dim], dtype=tf.float32, seed=None, name='z')
 
                         # rescale x to [0,1]
                         x_reshaped = tf.reshape(self.x, shape=[self.batch_size, self.image_height, self.image_width, self.c_dim], name='x_reshaped')
-                        self.images = x_reshaped
+                        self.images = x_reshaped # real data
 
                         '''
                         # one hot encode the label -- shape:[N] -> [N, self.y_dim]
@@ -195,14 +194,20 @@ class UserModel(Tower):
                 else:
                         # Create only the generator
 
-                        # self.x is the conditioned latent representation -- shape: [self.batch_size, self.image_height, self.image_width, self.z_dim + self.y_dim]
-                        self.x = tf.reshape(self.x, shape=[self.batch_size,  self.z_dim + self.y_dim])
-                        assert self.x.get_shape().as_list() == [self.batch_size, self.image_height, self.image_width, self.z_dim + self.y_dim], self.x.get_shape().as_list()
-                        # extract z and y
-                        self.y = self.x[:, :, :, self.z_dim:self.z_dim + self.y_dim]
-                        self.z = self.x[:, :, :, :self.z_dim]
+                        # sample z from a normal distribution - shape: [N, H, W, C]
+                        self.z = tf.random_normal(shape=[self.batch_size, self.image_height, self.image_width, self.z_dim], dtype=tf.float32, seed=None, name='z')
+
+                        # self.x is the conditioned latent representation -- shape: [self.batch_size, self.image_height, self.image_width, self.c_dim]
+                        self.x = tf.reshape(self.x, shape=[self.batch_size, self.image_height, self.image_width, self.c_dim])
+                        logging.debug('batch_size = {}'.format(self.batch_size))
+
+                        assert self.x.get_shape().as_list()[1:] == [self.image_height, self.image_width, self.c_dim], self.x.get_shape().as_list()
+
+                        # use x for conditon
+                        self.y = self.x
+
                         # create an instance of the generator
-                        self.G = self.generator(self.x, self.y)
+                        self.G = self.generator(self.z, self.y)
 
         def discriminator(self, image, y=None, reuse=False, offset=0, window=41):
                 """
@@ -225,13 +230,16 @@ class UserModel(Tower):
                 - linear layer with 1 output neuron - [N, 1]
                 Args:
                         image: batch of input images - shape: [N, H, W, C]
-                        y: batch of  labels - shape: [N, H, W, C]
+                        y: batch of labels - shape: [N, H, W, C], for condiation
                         reuse: whether to re-use previously created variables
                 """
                 with tf.variable_scope("discriminator") as scope:
                         if reuse:
                                 # re-use (share) variabels
                                 scope.reuse_variables()
+
+                        # Not used
+                        y = y
 
                         s1, s2, s3 = int(self.df_dim), int(self.df_dim*2), int(self.df_dim*3)
 

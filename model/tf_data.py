@@ -211,7 +211,6 @@ class LoaderFactory(object):
                         single_label = self.labels_db.reshape_decode(single_label, single_label_shape)
                 elif single_label is not None:  # Not using a seperate label db; label is scalar #
                         # single_label = tf.reshape(single_label, [])
-
                         # using as conditon of DCGAN, which shape is same to data
                         single_label_shape = np.reshape(single_label_shape, [3])
                         single_label = self.reshape_decode(single_label, single_label_shape)
@@ -240,10 +239,12 @@ class LoaderFactory(object):
                 if single_label is not None:
                         single_batch.append(single_label)
 
-                logging.debug('single_key shape={}, single_data shape={}, single_label shape={}'.format(\
+                logging.debug('single_key shape={}, single_data shape={}'.format(\
                         single_key.get_shape().as_list(),
-                        single_data.get_shape().as_list(),
-                        single_label.get_shape().as_list() ))
+                        single_data.get_shape().as_list() ))
+
+                if single_label is not None:
+                    logging.debug('single_label shape={}'.format(single_label.get_shape().as_list()))
 
                 if self.backend == 'tfrecords' and self.shuffle:
                         batch = tf.train.shuffle_batch(
@@ -361,11 +362,11 @@ class TFRecordsLoader(LoaderFactory):
                                 'label': tf.FixedLenFeature([self.height * self.width * self.channels], tf.float32), # y condition, gen_features
                         })
 
-                d = features['image_raw']
+                d = features['image_raw'] # x
                 ds = np.array([self.height, self.width, self.channels], dtype=np.int32)
                 logging.debug('image_raw: {}'.format(d.shape))
 
-                l = features['label']
+                l = features['label']  # Y
                 ls = np.array([self.height, self.width, self.channels], dtype=np.int32)
                 logging.debug('label: {}'.format(l.shape))
                 return key, d, ds, l, ls

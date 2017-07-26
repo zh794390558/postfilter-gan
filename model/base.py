@@ -130,7 +130,9 @@ class Model(object):
                     assert self.stage == utils.STAGE_INF
                     batch_x = batch_x
 
-            logging.debug('batch_x shape={} batch_y shape={}'.format(batch_x.get_shape().as_list(), batch_y.get_shape().as_list()))
+            logging.debug('batch_x shape={}'.format(batch_x.get_shape().as_list()))
+            if self.stage != utils.STAGE_INF:
+                logging.debug('batch_y shape={}'.format(batch_y.get_shape().as_list()))
 
     # get avilable gpu list
             available_devices = utils.get_available_gpus()
@@ -166,7 +168,7 @@ class Model(object):
                                              x=batch_x_split[dev_i],
                                              y=batch_y_split[dev_i])
                             else:
-                                tower_model = self.add_tower(obj_tower=obj_User_model,
+                                tower_model = self.add_tower(obj_tower=obj_UserModel,
                                              x=batch_x_split[dev_i],
                                              y=None)
 
