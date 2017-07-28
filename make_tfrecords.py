@@ -32,8 +32,8 @@ except ImportError as e:
 
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-                    #level = logging.DEBUG
-                    level = logging.WARN
+                    level = logging.DEBUG
+                    #level = logging.WARN
                     )
 
 def _bytes_feature(value):
@@ -183,12 +183,13 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
         out_file.write(example.SerializeToString())
 
 
-def prepare_file(filename, opts):
+def prepare_file(pathname, filename, opts):
     '''
     check output file
     '''
+    logging.debug('path {} file {}'.format(pathname, filename))
     # set up the output filepath
-    out_path = os.path.join(opts.save_path, filename)
+    out_path = os.path.join(opts.save_path, pathname)
     if not os.path.exists(out_path):
         os.mkdir(out_path)
 
@@ -211,13 +212,14 @@ def prepare_file(filename, opts):
     return out_filepath
 
 
+# save all featues into one tfrecords
 def write_record(out_filename, files, opts):
     '''
     out_filename: train, val, test
     filse: filename list
     opts: argparser param
     '''
-    out_filepath = prepare_file(out_filename, opts)
+    out_filepath = prepare_file(out_filename, out_filename, opts)
 
     # TFRecord Writer
     out_file = tf.python_io.TFRecordWriter(out_filepath)
@@ -229,6 +231,28 @@ def write_record(out_filename, files, opts):
         encoder_proc(gen_file, nature_file, out_file, opts.feature_size, opts.frames)
 
     out_file.close()
+
+# save featues to seprate tfrecords
+def write_record_sep(pathname, files, opts):
+    '''
+    out_filename: train, val, test
+    filse: filename list
+    opts: argparser param
+    '''
+        #for m, (gen_file, nature_file) in enumerate(files):
+    qbar = tqdm(enumerate(files), total=len(files))
+    for m, (gen_file, nature_file) in qbar:
+        out_filepath = prepare_file(pathname, os.path.splitext(os.path.basename(gen_file))[0], opts)
+        logging.debug('out_filepath = {}'.format(out_filepath))
+
+        # TFRecord Writer
+        out_file = tf.python_io.TFRecordWriter(out_filepath)
+
+        qbar.set_description('Process {}'.format(os.path.basename(gen_file)))
+        encoder_proc(gen_file, nature_file, out_file, opts.feature_size, opts.frames)
+
+        out_file.close()
+
 
 
 def main(opts):
@@ -268,7 +292,7 @@ def main(opts):
             # write train, val, test TFRecords
             write_record('train', files_train, opts)
             write_record('val', files_val, opts)
-            write_record('test', files_test, opts)
+            write_record_sep('test', files_test, opts)
 
         end_t = timeit.default_timer() - beg_t
         print('*' * 50)

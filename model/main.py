@@ -21,6 +21,7 @@ from utils import model_property
 import tf_data
 import lr_policy
 import json
+import struct
 
 # Constants
 TF_INTRA_OP_THREADS = 0
@@ -105,7 +106,7 @@ def load_snapshot(sess, weight_path, var_candidates):
         Loads a snapshot into a session from a weight path. Will only load the
         weights that are both in the weight_path file and the passed var_candidates.
         """
-        logging.info('Loading weights from pretrained model - {}', weight_path)
+        logging.info('Loading weights from pretrained model - {}'.format(weight_path))
         reader = tf.train.NewCheckpointReader(weight_path)
         var_map = reader.get_variable_to_shape_map()
 
@@ -116,12 +117,12 @@ def load_snapshot(sess, weight_path, var_candidates):
                         if vt.name.split(':')[0] == vm:
                                 if ('global_step' not in vt.name) and not (vt.name.startswith('train/')):
                                         vars_restore.append(vt)
-                                        loggint.info('restoring {} -> {}'.format(vm, vt.name))
+                                        logging.info('restoring {} -> {}'.format(vm, vt.name))
                                 else:
                                         logging.info('Not restoring {} -> {}'.format(vm, vt.name))
 
         logging.info('Restoring {} variable ops.'.format(len(vars_restore)))
-        tf.train.Saver(vars_restore, max_to_keep=0, shared=FLAGS.serving_export).restore(sess, weight_path)
+        tf.train.Saver(vars_restore, max_to_keep=0, sharded=FLAGS.serving_export).restore(sess, weight_path)
         logging.info('Variables restored.')
 
 def save_snapshot(sess, saver, save_dir, snapshot_prefix, epoch, for_serving=False):
@@ -130,9 +131,11 @@ def save_snapshot(sess, saver, save_dir, snapshot_prefix, epoch, for_serving=Fal
     in the ctor of the saver. Also saves the flow of the graph itself (only once).
     """
     number_dec = str(FLAGS.snapshotInterval-int(FLAGS.snapshotInterval))[2:]
+    logging.debug('number_dec={}'.format(number_dec))
     if number_dec is '':
        number_dec = '0'
     epoch_fmt = "{:." + number_dec + "f}"
+    logging.debug('epoch_fmt={}'.format(epoch_fmt))
 
     snapshot_file = os.path.join(save_dir, snapshot_prefix + '_' + epoch_fmt.format(epoch) + '.ckpt')
 
@@ -242,6 +245,69 @@ def save_weight_visualization(w_names, a_names, w, a):
                 dset.create_dataset('activations', data=a[i])
         vis_db.close()
 
+class SaveFeatureException(Exception):
+    def __init__(self):
+        pass
+    def __str__(self):
+        return 'Pack buf error for len not correct'
+
+class SaveFeature(object):
+    type_names = {
+            'int8'   : 'b',
+            'uint8'  : 'B',
+            'int16'  :'h',
+            'uint16' :'H',
+            'int32'  :'i',
+            'uint32' :'I',
+            'int64'  :'q',
+            'uint64' :'Q',
+            'float'  :'f',
+            'double' :'d',
+            'char'   :'s'
+            }
+
+    type_endian = {
+            'little-endian' : '<',
+            'big-endian' : '>',
+            }
+
+    def __init__(self, filename, endian='little-endian', type_name='float', feature_size=41):
+        self.binfile = open(filename, 'wb')
+
+        self.type_name = type_name
+        self.feature_size = feature_size
+        self.type_endian = endian
+        self.type_format = SaveFeature.type_names[self.type_name.lower()]
+        self.type_size = struct.calcsize(self.type_format)
+
+    def __del__(self):
+        self._close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_traceback):
+        return False # raise Exception
+
+    def _close(self):
+        self.binfile.close()
+
+    @property
+    def endian(self):
+        return SaveFeature.type_endian[self.type_endian]
+
+    @property
+    def frame_size(self):
+        return self.feature_size * self.type_size
+
+    def write(self, buf, frames):
+        logging.debug('frames = {} buf = {}'.format(frames, buf))
+        record_len = self.feature_size * frames
+        value = struct.pack(self.endian + '{}'.format(record_len) + self.type_format, *buf)
+        if len(value) != self.type_size * record_len:
+            raise SaveFeatureException
+        self.binfile.write(value)
+
 
 def Inference(sess, model):
     '''
@@ -273,17 +339,27 @@ def Inference(sess, model):
              if FLAGS.visualize_inf:
                  save_weight_visualization(weight_vars, activation_ops, w, a)
 
-             for i in range(len(keys)):
-                 #    for j in range(len(preds)):
-                 # We're allowing multiple predictions per image here. DIGITS doesnt support that iirc
-                 logging.info('Predictions for image ' + str(model.dataloader.get_key_index(keys[i])) +
-                              ': ' + json.dumps(preds[i].tolist()))
+             logging.debug('len(keys): {}'.format(len(keys)))
+             logging.debug('keys: {}'.format(keys))
+             logging.info('preds shape={}'.format(preds.shape))
+
+             preds = np.squeeze(preds)
+             logging.debug('preds shape={}'.format(preds.shape))
+             preds = np.transpose(preds, [1, 0])
+             logging.debug('preds shape={}'.format(preds.shape))
+
+             sz = preds.shape
+             logging.debug('sz ={}'.format(sz))
+
+             with SaveFeature('{}.lsf'.format(keys[0].split(':')[0]), feature_size=sz[-1]) as b:
+                 logging.debug('save Predicton to {}.lsf'.format(keys[0].split(':')[0]))
+                 b.write(preds.flatten(), sz[0])
 
     except tf.errors.OutOfRangeError:
         print('Done: tf.errors.OutOfRangeError')
 
 
-def Validation(sess, model, current_epoch):
+def Validation(sess, model, current_epoch, check_op):
     '''
     Runs one validataion epoch.
     '''
@@ -293,7 +369,9 @@ def Validation(sess, model, current_epoch):
     print_vals_sum = 0
     steps = 0
     while (steps * model.dataloader.batch_size) < model.dataloader.get_total():
-        summary_str = sess.run(model.summary)
+        summary_str, check = sess.run([model.summary, check_op])
+        logging.debug('check={}'.format(check))
+
         # Parse the summary
         tags, print_vals = summary_to_lists(summary_str)
         print_vals_sum = print_vals + print_vals_sum
@@ -353,6 +431,8 @@ def main(_):
                         exit(-1)
                     logging.info("Found %s classes", nclasses)
 
+                # Debugging NaNs and Inf
+                check_op = tf.add_check_numerics_ops()
 
                 # Import the network file
                 path_network = os.path.join(os.path.dirname(os.path.realpath(__file__)), FLAGS.networkDirectory, FLAGS.network)
@@ -418,6 +498,7 @@ def main(_):
                 else:
                         logging.error('Unknown save_var flag ({})'.format(FLAGS.save_vars))
                         exit(-1)
+
                 saver = tf.train.Saver(vars_to_save, max_to_keep=0, sharded=FLAGS.serving_export)
 
                 # Initialize variables
@@ -448,7 +529,7 @@ def main(_):
                 # initail Forward VAlidation Pass
                 if FLAGS.validation_db:
                         val_model.start_queue_runners(sess)
-                        Validation(sess, val_model, 0)
+                        Validation(sess, val_model, 0, check_op)
 
                 if FLAGS.train_db:
                     # During training, a log output should occur at least X times per epoch or every X images, whichever lower
@@ -472,13 +553,13 @@ def main(_):
 
                     # Create the learning rate policy
                     total_trainning_steps = train_model.dataloader.num_epochs * train_model.dataloader.get_total() / train_model.dataloader.batch_size
-
                     lrpolicy  = lr_policy.LRPolicy(FLAGS.lr_policy,
                                                    FLAGS.lr_base_rate,
                                                    FLAGS.lr_gamma,
                                                    FLAGS.lr_power,
                                                    total_trainning_steps,
                                                    FLAGS.lr_stepvalues)
+
                     train_model.start_queue_runners(sess)
 
                     # Trainnig
@@ -502,10 +583,11 @@ def main(_):
 
                                     feed_dict = {train_model.learning_rate: lrpolicy.get_learning_rate(step)}
 
-
-                                    _, summary_str, step = sess.run([train_model.train,
+                                    # Session.run
+                                    _, summary_str, step, _ = sess.run([train_model.train,
                                                                     train_model.summary,
-                                                                    train_model.global_step],
+                                                                    train_model.global_step,
+                                                                    check_op],
                                                                     feed_dict=feed_dict,
                                                                     options=run_options,
                                                                     run_metadata=run_metadata)
@@ -522,7 +604,7 @@ def main(_):
 
                                     # Potential Validation Pass
                                     if FLAGS.validation_db and current_epoch >= next_validation:
-                                            Validation(sess, val_model, current_epoch)
+                                            Validation(sess, val_model, current_epoch, check_op)
                                             # Find next nearest epoch value that exactly divisible by FLAGS.validation_interval:
                                             next_validation = (round(float(current_epoch)/FLAGS.validation_interval) + 1) * \
                                                                 FLAGS.validation_interval
@@ -552,7 +634,7 @@ def main(_):
 
                 # If required, perform final Validation pass
                 if FLAGS.validation_db and current_epoch >= next_validation:
-                    Validation(sess, val_model, current_epoch)
+                    Validation(sess, val_model, current_epoch, check_op)
 
                 # Close and terminate the quques
                 if FLAGS.train_db:

@@ -11,10 +11,22 @@ elif [[ $# == 1 ]]; then
         exit 1
     fi
 
-    python model/main.py --batch_size 6 --epoch 2 --network model.py --networkDirectory . \
-        --optimization adam --save log/train --seed 10 --shuffle True --snapshortInterval 1 \
-        --inference_db data/test --bitdepth 32 \
-        --lr_base_rate 0.0001 --lr_polcy fixed --save_vars all --summaries_dir log/summaries \
+    python model/main.py \
+        --batch_size 2\
+        --epoch 1 \
+        --network model.py \
+        --networkDirectory . \
+        --optimization adam \
+        --save log/train \
+        --seed 10 \
+        --shuffle False \
+        --snapshortInterval 1 \
+        --inference_db data/test\
+        --bitdepth 32 \
+        --weights log/train/gan_2.ckpt \
+        --lr_base_rate 0.0001 \
+        --lr_polcy fixed \
+        --summaries_dir log/summaries \
         --noserving_export #--log_device_placement --log_runtime_stats_per_step 2
 
 elif [[ $# < 1 ]]; then
@@ -34,7 +46,7 @@ elif [[ $# < 1 ]]; then
         --save_vars all \
         --summaries_dir /gfs/atlastts/StandFemale_22K/log/summaries \
         --seed 10 \
-        --shuffle True\
+        --shuffle False \
         --snapshotPrefix gan \
         --snapshortInterval 1 \
         --noserving_export

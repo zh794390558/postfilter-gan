@@ -98,3 +98,12 @@
 
 ## 2017-07-26 03:01:50,301 main.py[line:477] [ERROR] Model diverged with val/tower_0/model/chi_square = nan : Try decreasing your learning rate
 
+```test
+Debugging NaNs can be tricky, especially if you have a large network. tf.add_check_numerics_ops() adds ops to the graph that assert that each floating point tensor in the graph does not contain any NaN values, but does not run these checks by default. Instead it returns an op that you can run periodically, or on every step, as follows:
+
+train_op = ...
+check_op = tf.add_check_numerics_ops()
+
+sess = tf.Session()
+sess.run([train_op, check_op])  # Runs training and checks for NaNs
+```

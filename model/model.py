@@ -122,7 +122,7 @@ class UserModel(Tower):
 
                 if not self.is_inference:
                         # create both the generator and the discriminator
-                        # self.x is a batch of images - shape: [N, H, W, C]
+                        # self.x is a batch of images - shape: [N, H, W, C], NAT features
                         # self.y is a vector of labels - shape: [N, H, W, C], SYN features
 
                         # sample z from a normal distribution - shape: [N, H, W, C]
@@ -162,7 +162,12 @@ class UserModel(Tower):
                         # the typical GAN set-up is that of a minmax game where D is tring to minimize its own error and G is trying to
                         # maxminize D's error. However note how we are flipping G labels here: instaed of maximizing D's error, we are
                         # minimizing D's error on the 'wrong' label, this trick helps produce a stronger gradient
-                        self.g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(self.D_), logits=self.D_logits_, name='loss_G'))
+                        self.g_loss = tf.reduce_mean(
+                                tf.nn.sigmoid_cross_entropy_with_logits(
+                                                            logits=self.D_logits_,
+                                                            labels=tf.ones_like(self.D_),
+                                                            name='loss_G')
+                                )
 
                         # create some summaries for debug and monitoring
                         self.summaries.append(histogram_summary("z", self.z))

@@ -316,10 +316,13 @@ class TFRecordsLoader(LoaderFactory):
                         record_iter = tf.python_io.tf_record_iterator(shard_path)
                         for r in record_iter:
                                 self.total += 1
+                                #logging.debug('r = {}'.format(len(r)))
                         if not self.total:
                                 raise ValueError('Database or shrd contains no records {}'.format(self.db_path))
                         self.shard_paths.append(shard_path)
                 self.keys = ['{}:0'.format(p) for p in self.shard_paths]
+                logging.debug("self.keys = {}".format(self.keys))
+                logging.debug("self.total = {}".format(self.total))
 
                 # Use last record read to extract some preliminary data that is sometimes needed or useful
                 example_proto = tf.train.Example()
@@ -354,6 +357,8 @@ class TFRecordsLoader(LoaderFactory):
                     key, single_data, single_data_shape, single_label, single_label_shape
                 """
                 key, serialized_example = self.reader.read(key_queue)
+                logging.debug("key = {}".format(key))
+
                 features = tf.parse_single_example(
                         serialized_example,
                         # Defaults are not specified since both keys are required.

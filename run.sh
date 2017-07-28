@@ -11,11 +11,28 @@ elif [[ $# == 1 ]]; then
         exit 1
     fi
 
-    python model/main.py --batch_size 6 --epoch 2 --network model.py --networkDirectory . \
-        --optimization adam --save log/train --seed 10 --shuffle True --snapshortInterval 1 \
-        --train_db data/train --validation_db data/val --bitdepth 32 \
-        --lr_base_rate 0.0001 --lr_polcy fixed --save_vars all --summaries_dir log/summaries \
-        --noserving_export #--log_device_placement --log_runtime_stats_per_step 2
+    python model/main.py  \
+        --batch_size 6 \
+        --epoch 2 \
+        --bitdepth 32 \
+        --network model.py \
+        --networkDirectory . \
+        --optimization adam \
+        --lr_base_rate 0.0001 \
+        --lr_polcy fixed \
+        --train_db data/train \
+        --validation_db data/val \
+        --save log/train \
+        --save_vars all \
+        --summaries_dir log/summaries \
+        --seed 10 \
+        --shuffle True\
+        --snapshotPrefix gan \
+        --snapshortInterval 1 \
+        --noserving_export
+        #--noshuffle \
+        #--log_device_placement \
+        #--log_runtime_stats_per_step 2 \
 
 elif [[ $# < 1 ]]; then
     python model/main.py  \
@@ -35,7 +52,7 @@ elif [[ $# < 1 ]]; then
         --seed 10 \
         --shuffle True\
         --snapshotPrefix gan \
-        --snapshortInterval 1 \
+        --snapshortInterval 2 \
         --noserving_export
         #--noshuffle \
         #--log_device_placement \
