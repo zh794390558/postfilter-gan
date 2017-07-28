@@ -155,6 +155,7 @@ class Model(object):
                                     batch_y_split = tf.split(batch_y, len(available_devices), 0, name='split_batch_y')
 
             # Run the user model through the build_model function that should be filled in
+            # collect all type of lossess and all gpus
             grad_towers = []
             #with tf.variable_scope(tf.get_variable_scope()):
             for dev_i, dev_name in enumerate(available_devices):
@@ -196,8 +197,11 @@ class Model(object):
                                 self.summaries.append(scalar_summary(tower_loss.op.name, tower_loss))
 
                             if self.stage == utils.STAGE_TRAIN:
+                                # collect all type of losses on the gpu
                                 grad_tower_losses = []
+                                # for each type loss
                                 for loss in self.get_tower_losses(tower_model):
+                                    # compute gradients of this gpu
                                     grad_tower_loss = self.optimizer.compute_gradients(loss['loss'], loss['vars'])
                                     grad_tower_loss = tower_model.gradientUpdate(grad_tower_loss)
                                     grad_tower_losses.append(grad_tower_loss)
@@ -212,17 +216,23 @@ class Model(object):
                             with tf.device(available_devices[0]):
                                     n_losses = len(grad_towers[0])
                                     grad_averages = []
+                                    # for each loss, averages loss on all gpus
                                     for loss in xrange(n_losses):
                                             grad_averages.append(average_gradients([grad_towers[gpu][loss] for gpu in xrange(n_gpus)]))
+
                     apply_gradient_ops = []
                     for grad_avg in grad_averages:
+                            # apply average gradients
                             apply_gradient_ops.append(self.optimizer.apply_gradients(grad_avg, global_step=self.global_step))
+
+                    # train op, list
                     self._train = apply_gradient_ops
 
         def start_queue_runners(self, sess):
                 logging.info('Starting queue runners ({})'.format(self.stage))
                 # Distinguish the queue runner collection(for easliy obtaining them by collection key)
                 queue_runners = tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS, scope=self.stage + '.*')
+
                 for qr in queue_runners:
                         if self.stage in qr.name:
                                 tf.add_to_collection(utils.GraphKeys.QUEUE_RUNNERS, qr)
@@ -244,6 +254,7 @@ class Model(object):
                 is_training = self.stage == utils.STAGE_TRAIN
                 is_inference = self.stage == utils.STAGE_INF
                 input_shape = self.dataloader.get_shape()
+
                 tower = obj_tower(x, y, input_shape, self.nclasses, is_training, is_inference)
                 self.towers.append(tower)
                 return tower
@@ -251,6 +262,7 @@ class Model(object):
 
         @model_property
         def train(self):
+                # return tain_op
                 return self._train
 
         @model_property
@@ -285,6 +297,7 @@ class Model(object):
         @model_property
         def optimizer(self):
                 logging.info('Optimizer:%s', self._optimization)
+
                 if self._optimization == 'sgd':
                         return tf.train.GradientDescentOptimizer(learing_rate=self.learning_rate)
                 elif self._optimization =='adadelta':

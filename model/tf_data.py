@@ -254,7 +254,7 @@ class LoaderFactory(object):
                                 capacity=10 * self.batch_size,       # Max amount that will be loaded and queued
                                 shapes=[[], self.get_shape(), self.get_shape()], # Only makes sense is dynamic_pad=False , (key, data, label)
                                 min_after_dequeue=5 * self.batch_size,
-                                allow_smaller_final_batch=True, # Happens if total % batch_size != 0
+                                allow_smaller_final_batch=False, # Happens if total % batch_size != 0, must be False for multi-gpus task
                                 name='batcher'
                         )
                 else:
@@ -266,7 +266,7 @@ class LoaderFactory(object):
                                 # set number of threads to 1 for tfrecords (used for inference)
                                 num_threads=NUM_THREADS_DATA_LOADER if not self.is_inference else 1,
                                 capacity=max_queue_capacity,   # Max amout that will be loadded and queued
-                                allow_smaller_final_batch=True, # Happens if total % batch_size != 0
+                                allow_smaller_final_batch=False, # Happens if total % batch_size != 0, must be False for multi-gpus task
                                 name='batcher',
                         )
 

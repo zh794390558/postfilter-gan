@@ -37,37 +37,28 @@ FLAGS = tf.app.flags.FLAGS
 
 # Basic model parameters. #float, integer, boolean, string
 tf.app.flags.DEFINE_integer('batch_size', 16, """Number of images to process in a batch""")
-tf.app.flags.DEFINE_integer(
-    'croplen', 0, """Crop (x and y). A zero value means no cropping will be applied""")
+tf.app.flags.DEFINE_integer('croplen', 0, """Crop (x and y). A zero value means no cropping will be applied""")
 tf.app.flags.DEFINE_integer('epoch', 1, """Number of epochs to train, -1 for unbounded""")
-tf.app.flags.DEFINE_string('inference_db', '', """Directory with inference file source""")
-tf.app.flags.DEFINE_integer(
-    'validation_interval', 1, """Number of train epochs to complete, to perform one validation""")
+tf.app.flags.DEFINE_integer('validation_interval', 1, """Number of train epochs to complete, to perform one validation""")
 tf.app.flags.DEFINE_string('labels_list', '', """Text file listing label definitions""")
 tf.app.flags.DEFINE_float('momentum', '0.9', """Momentum""")
 tf.app.flags.DEFINE_string('network', '', """File containing network (model)""")
 tf.app.flags.DEFINE_string('networkDirectory', '', """Directory in which network exists""")
 tf.app.flags.DEFINE_string('optimization', 'sgd', """Optimization method""")
-tf.app.flags.DEFINE_string('save', 'results', """Save directory""")
+tf.app.flags.DEFINE_string('save', 'results', """Save snapshort directory""")
 tf.app.flags.DEFINE_integer('seed', 0, """Fixed input seed for repeatable experiments""")
 tf.app.flags.DEFINE_boolean('shuffle', False, """Shuffle records before training""")
-tf.app.flags.DEFINE_float(
-    'snapshotInterval', 1.0,
-    """Specifies the training epochs to be completed before taking a snapshot""")
+tf.app.flags.DEFINE_float('snapshotInterval', 1.0, """Specifies the training epochs to be completed before taking a snapshot""")
 tf.app.flags.DEFINE_string('snapshotPrefix', '', """Prefix of the weights/snapshots""")
 tf.app.flags.DEFINE_string('train_db', '', """Directory with training file source""")
-tf.app.flags.DEFINE_string(
-    'train_labels', '',
-    """Directory with an optional and seperate labels file source for training""")
+tf.app.flags.DEFINE_string('train_labels', '',"""Directory with an optional and seperate labels file source for training""")
 tf.app.flags.DEFINE_string('validation_db', '', """Directory with validation file source""")
-tf.app.flags.DEFINE_string(
-    'validation_labels', '',
-    """Directory with an optional and seperate labels file source for validation""")
-tf.app.flags.DEFINE_string(
-    'weights', '', """Filename for weights of a model to use for fine-tuning""")
+tf.app.flags.DEFINE_string('validation_labels', '',"""Directory with an optional and seperate labels file source for validation""")
+tf.app.flags.DEFINE_string('inference_db', '', """Directory with inference file source""")
+tf.app.flags.DEFINE_string('inference_save', '', """Directory which to save inference output files""")
+tf.app.flags.DEFINE_string('weights', '', """Filename for weights of a model to use for fine-tuning""")
 tf.app.flags.DEFINE_integer('bitdepth', 8, """Specifies an image's bitdepth""")
-tf.app.flags.DEFINE_boolean(
-            'visualize_inf', False, """Will output weights and activations for an inference job.""")
+tf.app.flags.DEFINE_boolean('visualize_inf', False, """Will output weights and activations for an inference job.""")
 
 # learnig rate
 tf.app.flags.DEFINE_float('lr_base_rate', '0.01', """Learning rate""")
@@ -329,6 +320,10 @@ def Inference(sess, model):
                 activation_ops.append(node_op_name)
                 continue
 
+    if FLAGS.inference_save:
+        if not os.path.exists(FLAGS.inference_save):
+            os.mkdir(FLAGS.inference_save)
+
     try:
          while not model.queue_coord.should_stop():
              keys, preds, [w], [a] = sess.run([model.dataloader.batch_k,
@@ -351,8 +346,13 @@ def Inference(sess, model):
              sz = preds.shape
              logging.debug('sz ={}'.format(sz))
 
-             with SaveFeature('{}.lsf'.format(keys[0].split(':')[0]), feature_size=sz[-1]) as b:
-                 logging.debug('save Predicton to {}.lsf'.format(keys[0].split(':')[0]))
+             filename = keys[0].split(':')[0]
+             filename = os.path.splitext(filename)[0]
+             filename = os.path.basename(filename)
+             filename = '{}.lsf'.format(filename)
+             filename = os.path.join(FLAGS.inference_save, filename)
+             logging.debug('Inference save filename = {}'.format(filename))
+             with SaveFeature(filename,  feature_size=sz[-1]) as b:
                  b.write(preds.flatten(), sz[0])
 
     except tf.errors.OutOfRangeError:

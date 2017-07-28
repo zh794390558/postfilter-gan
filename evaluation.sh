@@ -14,20 +14,27 @@ elif [[ $# == 1 ]]; then
     python model/main.py \
         --batch_size 2\
         --epoch 1 \
-        --network model.py \
-        --networkDirectory . \
-        --optimization adam \
-        --save log/train \
         --seed 10 \
         --shuffle False \
-        --snapshortInterval 1 \
+        --network model.py \
+        --networkDirectory . \
         --inference_db data/test\
+        --inference_save data/lsf \
         --bitdepth 32 \
         --weights log/train/gan_2.ckpt \
-        --lr_base_rate 0.0001 \
-        --lr_polcy fixed \
         --summaries_dir log/summaries \
         --noserving_export #--log_device_placement --log_runtime_stats_per_step 2
+        #--snapshortInterval 1 \
+        #--save log/train \
+        #--optimization adam \
+        #--lr_base_rate 0.0001 \
+        #--lr_polcy fixed \
+
+    python gen_wav.py \
+        --feature_dir data/lsf \
+        --f0_dir /gfs/atlastts/StandFemale_22K/nature/postf0 \
+        --wav_dir data/wav \
+        --tool_dir tools \
 
 elif [[ $# < 1 ]]; then
     python model/main.py  \
@@ -36,12 +43,13 @@ elif [[ $# < 1 ]]; then
         --bitdepth 32 \
         --network model.py \
         --networkDirectory . \
-        --optimization adam \
-        --lr_base_rate 0.00001 \
-        --lr_polcy fixed \
+        #--optimization adam \
+        #--lr_base_rate 0.00001 \
+        #--lr_polcy fixed \
         #--train_db /gfs/atlastts/StandFemale_22K/tfrecords/train \
         #--validation_db /gfs/atlastts/StandFemale_22K/tfrecords/val \
         --inference_db /gfs/atlastts/StandFemale_22K/tfrecords/test \
+        --inference_save /gfs/atlastts/StandFemale_22K/eval_output/lsf \
         --save /gfs/atlastts/StandFemale_22K/log/train \
         --save_vars all \
         --summaries_dir /gfs/atlastts/StandFemale_22K/log/summaries \
