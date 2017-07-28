@@ -107,3 +107,12 @@ check_op = tf.add_check_numerics_ops()
 sess = tf.Session()
 sess.run([train_op, check_op])  # Runs training and checks for NaNs
 ```
+
+## Use TCmalloc
+
+
+```bash
+apt-get install google-perftools
+LD_PRELOAD="/usr/lib/libtcmalloc.so" python myprogram.py
+```
+

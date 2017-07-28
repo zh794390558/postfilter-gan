@@ -13,6 +13,7 @@ import re
 import struct
 import logging
 from sklearn.model_selection import train_test_split
+import threading
 
 try:
     from six.moves import xrange
@@ -266,6 +267,7 @@ def main(opts):
 
         beg_t = timeit.default_timer()
 
+        threads = []
         # process the acustic data now
         for dset_i, (dset_key, dset_val)  in enumerate(cfg_desc.iteritems()):
             print(dset_key)
@@ -290,9 +292,17 @@ def main(opts):
             logging.debug('val data  ({}): {}'.format(len(files_val), files_val))
 
             # write train, val, test TFRecords
-            write_record('train', files_train, opts)
-            write_record('val', files_val, opts)
-            write_record_sep('test', files_test, opts)
+            threads.append(threading.Thread(target=write_record, args=('train', files_train, opts), name='train_data'))
+            threads.append(threading.Thread(target=write_record, args=('val', files_val, opts), name='val_data'))
+            threads.append(threading.Thread(target=write_record_sep, args=('test', files_test, opts), name='test_data'))
+
+            for t in threads:
+                t.setDaemon(True)
+                t.start()
+
+            for t in threads:
+                t.join()
+
 
         end_t = timeit.default_timer() - beg_t
         print('*' * 50)

@@ -9,7 +9,8 @@ RUN groupadd -f -g 800  zhanghui && \
     echo 'zhanghui:zhanghui' | chpasswd && \
     apt-get update && \
     apt-get install -y  --no-install-recommends --allow-remove-essential \
-	vim git bash-completion tig tree ctags sudo net-tools && \
+	vim git bash-completion tig tree ctags sudo net-tools \
+	google-perftools && \
     apt-get clean &&\
     rm -rf /var/lib/apt/lists/* && \
     usermod -a -G sudo zhanghui && \
