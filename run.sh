@@ -42,7 +42,7 @@ elif [[ $# < 1 ]]; then
         --network model.py \
         --networkDirectory . \
         --optimization adam \
-        --lr_base_rate 0.00001 \
+        --lr_base_rate 0.000001 \
         --lr_polcy fixed \
         --train_db /gfs/atlastts/StandFemale_22K/tfrecords/train \
         --validation_db /gfs/atlastts/StandFemale_22K/tfrecords/val \

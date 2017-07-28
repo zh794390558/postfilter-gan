@@ -41,10 +41,11 @@ def main(FLAGS):
 
         qbar.set_description('Process {}'.format(wavfile))
 
-        cmd = os.path.abspath(os.path.join(FLAGS.tool_dir,'straight_mceplsf'))
+        tool = os.path.abspath(os.path.join(FLAGS.tool_dir,'straight_mceplsf'))
         args = ' -f 22050 -lsf -order 40 -shift 5 -f0file {} -syn {} {}'.format(f0, feature, wavfile)
+        cmd = tool + args
 
-        subprocess.check_call(cmd+args, shell=True)
+        subprocess.check_call(cmd, shell=True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate wav from feature and F0')

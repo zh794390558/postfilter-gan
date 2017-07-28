@@ -258,6 +258,7 @@ class LoaderFactory(object):
                                 name='batcher'
                         )
                 else:
+                        # FIFOQueue
                         batch = tf.train.batch(
                                 single_batch,
                                 batch_size=self.batch_size,

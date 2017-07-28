@@ -22,6 +22,7 @@ import tf_data
 import lr_policy
 import json
 import struct
+import shutil
 
 # Constants
 TF_INTRA_OP_THREADS = 0
@@ -29,8 +30,10 @@ TF_INTER_OP_THREADS = 0
 MIN_LOGS_PER_TRAIN_EPOCH = 8  # torch default: 8
 
 logging.basicConfig(format='%(asctime)s %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s',
-                     datafmt='%Y-%m-%d %H:%M:%S',
-                     level=logging.INFO)
+        datafmt='%Y-%m-%d %H:%M:%S',
+        #level=logging.INFO
+        level=logging.DEBUG
+        )
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -87,6 +90,7 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False, """Whether to log dev
 tf.app.flags.DEFINE_integer(
     'log_runtime_stats_per_step', 0,
     """Logs runtime statistics for Tensorboard every x steps, defaults to 0 (off).""")
+
 
 def dump(obj):
     for attr in dir(obj):
@@ -263,7 +267,10 @@ class SaveFeature(object):
             }
 
     def __init__(self, filename, endian='little-endian', type_name='float', feature_size=41):
-        self.binfile = open(filename, 'wb')
+        if not os.path.exists(filename):
+            self.binfile = open(filename, 'wb')
+        else:
+            self.binfile = open(filename, 'ab')
 
         self.type_name = type_name
         self.feature_size = feature_size
@@ -300,6 +307,7 @@ class SaveFeature(object):
         self.binfile.write(value)
 
 
+# Evaluation
 def Inference(sess, model):
     '''
     Runs one inference (evaluation) epoch (all the files in the loader)
@@ -321,6 +329,7 @@ def Inference(sess, model):
                 continue
 
     if FLAGS.inference_save:
+        shutil.rmtree(FLAGS.inference_save, ignore_errors=True)
         if not os.path.exists(FLAGS.inference_save):
             os.mkdir(FLAGS.inference_save)
 
@@ -352,6 +361,7 @@ def Inference(sess, model):
              filename = '{}.lsf'.format(filename)
              filename = os.path.join(FLAGS.inference_save, filename)
              logging.debug('Inference save filename = {}'.format(filename))
+
              with SaveFeature(filename,  feature_size=sz[-1]) as b:
                  b.write(preds.flatten(), sz[0])
 
@@ -370,7 +380,7 @@ def Validation(sess, model, current_epoch, check_op):
     steps = 0
     while (steps * model.dataloader.batch_size) < model.dataloader.get_total():
         summary_str, check = sess.run([model.summary, check_op])
-        logging.debug('check={}'.format(check))
+        #logging.debug('check={}'.format(check)) # check is always None
 
         # Parse the summary
         tags, print_vals = summary_to_lists(summary_str)
