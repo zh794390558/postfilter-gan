@@ -11,9 +11,9 @@ elif [[ $# == 1 ]]; then
     fi
 
     # test with 30 examples
-    python make_tfrecords.py --examples 30 --save_path data --cfg cfg/postfilter.toml --force-gen
+    python make_tfrecords.py --examples 30 --save_path data --cfg cfg/postfilter.toml --test_size 0.0 --val_size 0.0 --force-gen
 elif [[ $# < 1 ]]; then
-    python make_tfrecords.py --save_path /gfs/atlastts/StandFemale_22K/tfrecords --cfg cfg/postfilter.toml --force-gen
+    python make_tfrecords.py --save_path /gfs/atlastts/StandFemale_22K/tfrecords --cfg cfg/postfilter.toml --test_size 0.1 --val_size 0.1 --force-gen
 fi
 
 

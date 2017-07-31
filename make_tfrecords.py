@@ -267,6 +267,9 @@ def main(opts):
 
         beg_t = timeit.default_timer()
 
+        test_size = None
+        train_size = None
+        val_size = None
         threads = []
         # process the acustic data now
         for dset_i, (dset_key, dset_val)  in enumerate(cfg_desc.iteritems()):
@@ -285,8 +288,9 @@ def main(opts):
             logging.debug('Total files num: {}'.format(nfiles))
 
             # split: train, val , test dataset
-            files_train, files_test = train_test_split(files, test_size=0.15)
-            files_train, files_val = train_test_split(files_train, test_size=0.15)
+            files_train, files_test = train_test_split(files, test_size=opts.test_size)
+            files_train, files_val = train_test_split(files_train, test_size=opts.val_size)
+            test_size, train_size, val_size = len(files_test), len(files_train), len(files_val)
             logging.debug('test data ({}): {}'.format(len(files_test), files_test))
             logging.debug('train data ({}): {}'.format(len(files_train), files_train))
             logging.debug('val data  ({}): {}'.format(len(files_val), files_val))
@@ -302,6 +306,8 @@ def main(opts):
 
             for t in threads:
                 t.join()
+
+            logging.info('test({}), train({}), val({})'.format(test_size, train_size, val_size))
 
 
         end_t = timeit.default_timer() - beg_t
@@ -326,6 +332,10 @@ if __name__ == '__main__':
                 help='feature length')
     parser.add_argument('--examples', type=int, default=None,
                 help='convert *examples* examples, for debug')
+    parser.add_argument('--test_size', type =float, default=0.15,
+                help='data split rate for test out of all data')
+    parser.add_argument('--val_size', type =float, default=0.15,
+                help='data split rate for val out of train data')
 
     opts = parser.parse_args()
     pprint(opts)

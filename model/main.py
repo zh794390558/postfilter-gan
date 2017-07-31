@@ -583,6 +583,7 @@ def main(_):
                             while not train_model.queue_coord.should_stop():
                                     log_runtime = FLAGS.log_runtime_stats_per_step and (step % FLAGS.log_runtime_stats_per_step == 0)
 
+                                    # log runtime for benchmark
                                     run_options = None
                                     run_metadata = None
                                     if log_runtime:
@@ -605,9 +606,21 @@ def main(_):
                                     step = step / len(train_model.train)
 
 
+                                    #1. display the eaxct total memory, compute time, and tensor output sizes to TensorBoard
                                     if log_runtime:
                                             writer.add_run_metadata(run_metadata, str(step))
 
+                                    #2, another method to trace the timeline of operations
+                                    # You can then open Google Chrome, go to the page chrome://tracing and load the timeline.json file
+                                    if log_runtime:
+                                            # Create the Timeline object, and write it to json
+                                            tl = timeline.TimeLine(run_metadata.step_stats)
+                                            ctf = tl.generate_chrome_trace_format()
+                                            prof_path = os.path.join(FLAGS.summaries_dir, 'benchmark')
+                                            with open(os.path.join(prof_path, 'timeline.json'), 'w') as f:
+                                                f.write(ctf)
+
+                                    # sumamry for TensorBoard
                                     writer.add_summary(summary_str, step)
 
                                     current_epoch = round((step * batch_size_train) / train_model.dataloader.get_total(), epoch_round)
@@ -627,6 +640,7 @@ def main(_):
                                             next_snapshot_save = (round(float(current_epoch)/FLAGS.snapshotInterval) + 1) * \
                                                                 FLAGS.snapshotInterval
                                             last_snapshot_save_epoch = current_epoch
+
                                     writer.flush()
                     except tf.errors.OutOfRangeError:
                             logging.info('Done training for epochs limit reached: tf.errors.OutOfRangeError')
@@ -660,7 +674,6 @@ def main(_):
                 writer.close()
                 logging.info('END')
                 exit(0)
-
 
 
 if __name__ == '__main__':
