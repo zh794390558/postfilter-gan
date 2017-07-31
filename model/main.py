@@ -190,7 +190,8 @@ def summary_to_lists(summary_str):
     vals = []
     for s in summ.value:
         if s.HasField('simple_value'):  # and s.simple_value: # Only parse scalar_summaries
-            if s.simple_value == float('Inf') or np.isnan(s.simple_value):
+            #if s.simple_value == float('Inf') or np.isnan(s.simple_value):
+            if s.simple_value == float('Inf') :
                 raise ValueError('Model diverged with {} = {} : \
                         Try decreasing your learning rate'.format(s.tag, s.simple_value))
 

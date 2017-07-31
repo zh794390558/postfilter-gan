@@ -23,7 +23,7 @@ elif [[ $# == 1 ]]; then
         --train_db data/train \
         --validation_db data/val \
         --save log/train \
-        --save_vars all \
+        --save_vars trainable \
         --summaries_dir log/summaries \
         --seed 10 \
         --shuffle True\
