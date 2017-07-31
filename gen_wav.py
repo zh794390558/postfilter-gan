@@ -6,6 +6,8 @@ import os
 import argparse
 import logging
 import subprocess
+import multiprocessing
+import time
 
 try:
     from tqdm import tqdm
@@ -18,10 +20,19 @@ logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s',
                     level = logging.DEBUG
                     )
 
+# use `starght_mceplsf` tool to gen wav
+def gen_wav(f0file, feature, wavfile):
+    tool = os.path.abspath(os.path.join(FLAGS.tool_dir,'straight_mceplsf'))
+    args = ' -f 22050 -lsf -order 40 -shift 5 -f0file {} -syn {} {}'.format(f0file, feature, wavfile)
+    cmd = tool + args
+
+    subprocess.check_call(cmd, shell=True)
+
 def main(FLAGS):
     if not os.path.exists(FLAGS.wav_dir):
         os.mkdir(FLAGS.wav_dir)
 
+    # syn files and f0 files
     features = os.listdir(FLAGS.feature_dir)
     f0s = [ os.path.join(FLAGS.f0_dir, os.path.splitext(f)[0] + '.f0') for f in features]
 
@@ -29,6 +40,9 @@ def main(FLAGS):
         if not os.path.exists(f):
             raise ValueError('featues corespond f0 ({}) file not exsits'.format(f))
 
+    start = time.time()
+
+    processes = []
     qbar = tqdm(enumerate(zip(features, f0s)))
     for i, (feature, f0) in qbar:
         filename = os.path.basename(f0)
@@ -41,11 +55,16 @@ def main(FLAGS):
 
         qbar.set_description('Process {}'.format(wavfile))
 
-        tool = os.path.abspath(os.path.join(FLAGS.tool_dir,'straight_mceplsf'))
-        args = ' -f 22050 -lsf -order 40 -shift 5 -f0file {} -syn {} {}'.format(f0, feature, wavfile)
-        cmd = tool + args
+        # multi-process
+        p = multiprocessing.Process(target=gen_wav, args=(f0, feature, wavfile))
+        processes.append(p)
+        p.start()
 
-        subprocess.check_call(cmd, shell=True)
+    # wait childs
+    for p in processes:
+        p.join()
+
+    logging.info('Process time = {}s'.format(time.time() - start))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate wav from feature and F0')
@@ -58,3 +77,4 @@ if __name__ == '__main__':
     logging.info(FLAGS)
 
     main(FLAGS)
+

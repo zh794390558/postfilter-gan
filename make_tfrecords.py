@@ -300,6 +300,7 @@ def main(opts):
             threads.append(threading.Thread(target=write_record, args=('val', files_val, opts), name='val_data'))
             threads.append(threading.Thread(target=write_record_sep, args=('test', files_test, opts), name='test_data'))
 
+            # multi-thread
             for t in threads:
                 t.setDaemon(True)
                 t.start()
