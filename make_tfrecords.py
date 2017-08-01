@@ -177,8 +177,8 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
                 'height': _int64_feature(feature_size), # feature_szie (41)
                 'width': _int64_feature(frames), # frames (200)
                 'encoding': _int64_feature(0),  # no encoding, fix to 0
-                'image_raw': _floats_feature(gen_list), # nature_features
-                'label': _floats_feature(nat_list)  # gen_features
+                'image_raw': _floats_feature(gen_list), # gen_features
+                'label': _floats_feature(nat_list)  # nature_features
             }))
         #logging.debug('One Example: {}'.format(example))
         out_file.write(example.SerializeToString())
