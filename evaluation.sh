@@ -35,7 +35,7 @@ elif [[ $# == 1 ]]; then
         #--lr_polcy fixed \
 
 elif [[ $# < 1 ]]; then
-    CUDA_VISIBLE_DEVICES=1 python model/main.py  \
+    CUDA_VISIBLE_DEVICES=-1 python model/main.py  \
         --batch_size 1 \
         --epoch 1 \
         --seed 10 \
@@ -43,9 +43,9 @@ elif [[ $# < 1 ]]; then
         --noshuffle \
         --network model.py \
         --networkDirectory . \
-        --weights /gfs/atlastts/StandFemale_22K/log/train/gan_64.ckpt \
-        --inference_db /gfs/atlastts/StandFemale_22K/tfrecords/test \
         --inference_save /gfs/atlastts/StandFemale_22K/lsf \
+        --weights /gfs/atlastts/StandFemale_22K/log/train/gan_8456.ckpt \
+        --inference_db /gfs/atlastts/StandFemale_22K/tfrecords/test \
         --summaries_dir /gfs/atlastts/StandFemale_22K/log/summaries \
         --noserving_export
         #--snapshotPrefix gan \

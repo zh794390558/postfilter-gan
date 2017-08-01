@@ -1,1 +1,0 @@
-'straight_mceplsf  -f 22050 -lsf -order 40 -shift 5 -f0file %s -syn %s %s' %(f0file, lsffile, wavfile)

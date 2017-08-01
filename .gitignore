@@ -4,3 +4,4 @@ data
 *.swp
 log/
 *.lsf
+tools/demo/
