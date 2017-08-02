@@ -310,7 +310,7 @@ class TFRecordsLoader(LoaderFactory):
                         files = [os.path.join(self.db_path, f) for f in os.listdir(self.db_path)]
                 else:
                         files = [self.db_path]
-                logging.debug('{}: files {}'.format(__file__, files))
+                #logging.debug('{}: files {}'.format(__file__, files))
 
                 for shard_path in files:
                         # Account for the relative path format in list.txt

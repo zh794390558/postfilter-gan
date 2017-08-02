@@ -14,6 +14,7 @@ import struct
 import logging
 from sklearn.model_selection import train_test_split
 import threading
+from multiprocessing.pool import ThreadPool
 
 try:
     from six.moves import xrange
@@ -32,7 +33,7 @@ except ImportError as e:
     import toml
 
 
-logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+logging.basicConfig(format='%(asctime)s %(threadName)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
                     level = logging.DEBUG
                     #level = logging.WARN
                     )
@@ -119,17 +120,14 @@ class ExtractFeature(object):
             raise ExtractFeatureException
         return np.asarray(struct.unpack(self.endian +'{}'.format(record_len) + self.type_format, value))
 
-
-def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frames=200):
-    """ extract features of gen and nature wav and write to TFRecords.
-        out_file: TFRecordWriter.
-    """
+def extract_feature(gen_filename, nature_filename, feature_size=41, frames=200):
+    # features files must exists
     if not os.path.exists(gen_filename) or not os.path.exists(nature_filename):
         raise ValueError("ERROR: gen file or nature file does not exists")
 
     logging.info(' {} x {}, record len {}'.format(frames, feature_size, frames * feature_size))
 
-    # create extract class
+    # create extract class, and extract featues from file
     with ExtractFeature(gen_filename, feature_size=feature_size) as gen_ext, \
          ExtractFeature(nature_filename, feature_size=feature_size) as nat_ext:
 
@@ -149,12 +147,21 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
 
     assert gen_features.shape == nature_features.shape, (gen_feautres.shape, nature_features.shape)
 
-    # raw first
+    # raw first, to matrix
     gen_features.shape = (-1, feature_size) #  frame x feature
     gen_features.astype(np.float32)
     nature_features.shape = (-1, feature_size) # frame x feature
     nature_features.astype(np.float32)
     logging.info('features raw shape={}'.format(gen_features.shape))
+
+    return gen_features, nature_features
+
+# transform data to TFRecords
+def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frames=200):
+    """ extract features of gen and nature wav and write to TFRecords.
+        out_file: TFRecordWriter.
+    """
+    gen_features, nature_features = extract_feature(gen_filename, nature_filename, feature_size, frames)
 
     # bank of 200 frame
     n_frames = int(gen_features.shape[0] / frames)
@@ -184,6 +191,7 @@ def encoder_proc(gen_filename, nature_filename, out_file, feature_size=41, frame
         out_file.write(example.SerializeToString())
 
 
+# make dirs or touch file
 def prepare_file(pathname, filename, opts):
     '''
     check output file
@@ -214,12 +222,16 @@ def prepare_file(pathname, filename, opts):
 
 
 # save all featues into one tfrecords
-def write_record(out_filename, files, opts):
+def write_record(out_filename, files, normal_done, opts):
     '''
     out_filename: train, val, test
     filse: filename list
+    normal_done: threading.Event for normal done
     opts: argparser param
     '''
+    if normal_done is not None:
+        normal_done.wait()
+
     out_filepath = prepare_file(out_filename, out_filename, opts)
 
     # TFRecord Writer
@@ -234,13 +246,17 @@ def write_record(out_filename, files, opts):
     out_file.close()
 
 # save featues to seprate tfrecords
-def write_record_sep(pathname, files, opts):
+def write_record_sep(pathname, files, normal_done, opts):
     '''
     out_filename: train, val, test
     filse: filename list
+    normal_done: threading.Event for normal done
     opts: argparser param
     '''
-        #for m, (gen_file, nature_file) in enumerate(files):
+    if normal_done is not None:
+        normal_done.wait()
+
+    #for m, (gen_file, nature_file) in enumerate(files):
     qbar = tqdm(enumerate(files), total=len(files))
     for m, (gen_file, nature_file) in qbar:
         out_filepath = prepare_file(pathname, os.path.splitext(os.path.basename(gen_file))[0], opts)
@@ -254,6 +270,95 @@ def write_record_sep(pathname, files, opts):
 
         out_file.close()
 
+
+# mean
+def mean(gen_filename, nature_filename, feature_size=41, frames=200):
+    """
+        z-score noraml : 0 mean, 1 std
+        return: gen_sum , nature_sum ,total
+    """
+    gen_features, nature_features = extract_feature(gen_filename, nature_filename, feature_size, frames)
+
+    gen_sum = np.sum(gen_features, axis=0)
+    gen_num = gen_features.shape[0]
+    nat_sum = np.sum(nature_features, axis=0)
+    nat_num = nature_features.shape[0]
+
+    assert gen_num == nat_num, gen_num
+
+    return gen_sum, nat_sum, gen_num
+
+# std
+def std(gen_filename, nature_filename, gen_mean, nature_mean,  feature_size=41, frames=200):
+    """
+        z-score noraml : 0 mean, 1 std
+        gen_sum = sum((x -u)**2) / N
+        return: gen_sum , nature_sum ,total
+    """
+    gen_features, nature_features = extract_feature(gen_filename, nature_filename, feature_size, frames)
+
+    gen_sum = np.sum(np.power((gen_features - gen_mean), 2), axis=0)
+    gen_num = gen_features.shape[0]
+    nat_sum = np.sum(np.power((nature_features - nature_mean), 2), axis=0)
+    nat_num = nature_features.shape[0]
+
+    assert gen_num == nat_num, gen_num
+
+    return map(lambda x: x / gen_num, [gen_sum, nat_sum]), gen_num
+    #return map(lambda x, y: x / y, [gen_sum, nat_sum], gen_num), gen_num
+
+# z-score normal
+def z_score_normal(files, normal_done, opts, name):
+    '''
+    files: features files, [(gen_file, nature_file), ...]
+    normal_done: threding.Event for normal done
+    opts: app options
+    '''
+
+    t = threading.current_thread()
+    t.name = name
+
+    # sum for mean
+    gen_sum , nat_sum, total = 0., 0., 0.
+
+    # compute mean of data
+    # for m, (gen_file, nature_file) in enumerate(files):
+    qbar = tqdm(enumerate(files), total=len(files))
+    for m, (gen_file, nature_file) in qbar:
+        qbar.set_description('Process {}'.format(os.path.basename(gen_file)))
+        gen, nat, num = mean(gen_file, nature_file, opts.feature_size, opts.frames)
+        gen_sum, nat_sum, total = gen_sum + gen, nat_sum + nat, total + num
+
+    # mean
+    gen_mean, nat_mean = gen_sum / total, nat_sum / total
+
+    logging.info('gen mean = {} \n nature mean = {} \n total = {}'.format(gen_mean, nat_mean, total))
+
+    # sum for std
+    gen_square, nat_square, total_square = 0., 0., 0.
+
+    # compute std of data
+    # for m, (gen_file, nature_file) in enumerate(files):
+    qbar = tqdm(enumerate(files), total=len(files))
+    for m, (gen_file, nature_file) in qbar:
+        qbar.set_description('Process {}'.format(os.path.basename(gen_file)))
+        [gen, nat], num = std(gen_file, nature_file, gen_mean, nat_mean, opts.feature_size, opts.frames)
+        logging.debug('gen shape {}, nat shape {}'.format(gen.shape, nat.shape))
+        gen_square, nat_square, total_square = gen_square + gen, nat_square + nat, total_square + num
+    logging.debug('gen square = {} \n nature square = {} \n total = {}'.format(gen_square, nat_square, total))
+
+    # total num must be equal
+    assert total == total_square
+
+    # std
+    gen_std, nat_std = map(np.sqrt, [gen_square, nat_square])
+
+    logging.info('gen std = {} \n nature std = {} \n total = {}'.format(gen_std, nat_std, total))
+
+    # noraml doen Event
+    normal_done.set()
+
+    return gen_mean, nat_mean, gen_std, nat_std
 
 
 def main(opts):
@@ -276,16 +381,28 @@ def main(opts):
             print(dset_key)
             print('-' * 50)
 
+            # total dataset
             # zip(gen, nature)
             gen_dir = dset_val['gen']
             nature_dir = dset_val['nature']
             files = [(os.path.join(gen_dir, wav), os.path.join(nature_dir, os.path.splitext(wav)[0] + '.cep'))
                   for wav in os.listdir(gen_dir)[:opts.examples] if wav.endswith('.mcep')]
-
-            # total dataset
-            logging.debug(files[:1])
             nfiles = len(files)
+
+            logging.debug(files[:1])
             logging.debug('Total files num: {}'.format(nfiles))
+
+            # thread pool
+            pool = ThreadPool(4)
+
+            # z-score normal
+            normal_done = threading.Event()
+            #normal_done.clear()
+            #threads.append(threading.Thread(target=z_score_normal, args=(files, normal_done, opts), name='z_score_normal_thread'))
+            normal_ret = pool.apply_async(z_score_normal, args=(files, normal_done, opts, 'z_score_normal_thread'))
+            normal_ret.wait()
+            ret = normal_ret.get()
+            print(ret)
 
             # split: train, val , test dataset
             files_train, files_test = train_test_split(files, test_size=opts.test_size)
@@ -296,9 +413,15 @@ def main(opts):
             logging.debug('val data  ({}): {}'.format(len(files_val), files_val))
 
             # write train, val, test TFRecords
-            threads.append(threading.Thread(target=write_record, args=('train', files_train, opts), name='train_data'))
-            threads.append(threading.Thread(target=write_record, args=('val', files_val, opts), name='val_data'))
-            threads.append(threading.Thread(target=write_record_sep, args=('test', files_test, opts), name='test_data'))
+            #threads.append(threading.Thread(target=write_record, args=('train', files_train, normal_done, opts), name='train_data_thread'))
+            #threads.append(threading.Thread(target=write_record, args=('val', files_val, normal_done, opts), name='val_data_thread'))
+            #threads.append(threading.Thread(target=write_record_sep, args=('test', files_test, normal_done, opts), name='test_data_thread'))
+            pool.apply_async(write_record, args=('train', files_train, normal_done, opts))
+            pool.apply_async(write_record, args=('val', files_val, normal_done, opts))
+            pool.apply_async(write_record_sep, args=('test', files_test, normal_done, opts))
+
+            pool.close()
+            pool.join()
 
             # multi-thread
             for t in threads:
@@ -308,6 +431,7 @@ def main(opts):
             for t in threads:
                 t.join()
 
+            normal_done.clear()
             logging.info('test({}), train({}), val({})'.format(test_size, train_size, val_size))
 
 

@@ -44,15 +44,16 @@ elif [[ $# < 1 ]]; then
         --optimization adam \
         --lr_base_rate 0.000001 \
         --lr_polcy fixed \
+        --weights /gfs/atlastts/StandFemale_22K/log/train/gan_18976.ckpt \
         --train_db /gfs/atlastts/StandFemale_22K/tfrecords/train \
         --validation_db /gfs/atlastts/StandFemale_22K/tfrecords/val \
         --save /gfs/atlastts/StandFemale_22K/log/train \
-        --save_vars all \
+        --save_vars trainable \
         --summaries_dir /gfs/atlastts/StandFemale_22K/log/summaries \
         --seed 10 \
         --shuffle True\
         --snapshotPrefix gan \
-        --snapshortInterval 2 \
+        --snapshortInterval 10 \
         --noserving_export
         #--noshuffle \
         #--log_device_placement \
