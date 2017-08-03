@@ -43,8 +43,8 @@ elif [[ $# < 1 ]]; then
         --noshuffle \
         --network model.py \
         --networkDirectory . \
+        --weights /gfs/atlastts/StandFemale_22K/log/train/gan_18977.ckpt \
         --inference_save /gfs/atlastts/StandFemale_22K/lsf \
-        --weights /gfs/atlastts/StandFemale_22K/log/train/gan_8456.ckpt \
         --inference_db /gfs/atlastts/StandFemale_22K/tfrecords/test \
         --summaries_dir /gfs/atlastts/StandFemale_22K/log/summaries \
         --noserving_export
