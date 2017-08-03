@@ -116,3 +116,13 @@ apt-get install google-perftools
 LD_PRELOAD="/usr/lib/libtcmalloc.so" python myprogram.py
 ```
 
+
+## make_tfrecords.py
+
+tqdm can not used in multi-threds, use below codes to generate the error.
+
+```python
+pool.apply_async(write_record_sep, args=('train', files_train,  result, opts, 'train_data_thread'))
+pool.apply_async(write_record_sep, args=('val', files_val, result, opts, 'val_data_thread'))
+pool.apply_async(write_record_sep, args=('test', files_test, result, opts, 'test_data_thread'))
+```
