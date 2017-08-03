@@ -413,8 +413,8 @@ def main(opts):
 
             # total dataset
             # zip(gen, nature)
-            gen_dir = dset_val['gen']
-            nature_dir = dset_val['nature']
+            gen_dir = dset_val['gen'] # '.mcep'
+            nature_dir = dset_val['nature'] #'.cep'
             files = [(os.path.join(gen_dir, wav), os.path.join(nature_dir, os.path.splitext(wav)[0] + '.cep'))
                   for wav in os.listdir(gen_dir)[:opts.examples] if wav.endswith('.mcep')]
             nfiles = len(files)
