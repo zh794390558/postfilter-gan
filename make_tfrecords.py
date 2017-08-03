@@ -166,25 +166,23 @@ def encoder_proc(gen_filename, nature_filename, result, out_file, feature_size=4
     # extract features
     gen_features, nature_features = extract_feature(gen_filename, nature_filename, feature_size, frames)
 
-    logging.debug('gen features:raw {}'.format(gen_features))
-    logging.debug('nat features:raw {}'.format(nature_features))
+    #logging.debug('gen features:raw {}'.format(gen_features))
+    #logging.debug('nat features:raw {}'.format(nature_features))
     #logging.debug('result {}'.format(result))
 
-    # normal
-    gen_mean, nat_mean, gen_std, nat_std = result
+    if result:
+        # normal
+        gen_mean, nat_mean, gen_std, nat_std = result
 
-    gen_features = (gen_features - gen_mean) / gen_std
-    nature_features = (nature_features - nat_mean) / nat_std
-    logging.debug('gen features:normal {}'.format(gen_features))
-    logging.debug('nat features:normal {}'.format(nature_features))
+        gen_features = (gen_features - gen_mean) / gen_std
+        nature_features = (nature_features - nat_mean) / nat_std
+        #logging.debug('gen features:normal {}'.format(gen_features))
+        #logging.debug('nat features:normal {}'.format(nature_features))
 
-    #assert (np.average(gen_features, axis=0) == gen_mean) and (np.std(gen_features, aixs=0) == gen_std)
-    #a = np.mean(nature_features, axis=0)
-    #logging.debug(' {}'.format())
-    #b = np.std(nature_features, aixs=0)
-
-    assert (np.average(gen_features, axis=0) == gen_mean) and (np.std(gen_features, aixs=0) == gen_std)
-    assert (np.average(nature_features, axis=0) == nat_mean) and (np.std(nature_features, aixs=0) == nat_std)
+        assert (np.mean(gen_features, axis=0) - gen_mean).all()
+        assert (np.std(gen_features, axis=0) - gen_std).all()
+        assert (np.mean(nature_features, axis=0) - nat_mean).all()
+        assert (np.std(nature_features, axis=0) - nat_std).all()
 
     # bank of 200 frame
     n_frames = int(gen_features.shape[0] / frames)
@@ -267,7 +265,11 @@ def write_record(out_filename, files, result, opts, name):
     qbar = tqdm(enumerate(files), total=len(files))
     for m, (gen_file, nature_file) in qbar:
         qbar.set_description('Process {}'.format(os.path.basename(gen_file)))
-        encoder_proc(gen_file, nature_file, result, out_file, opts.feature_size, opts.frames)
+        try:
+            encoder_proc(gen_file, nature_file, result, out_file, opts.feature_size, opts.frames)
+        except Exception as e:
+            print(e)
+            raise e
 
     logging.debug("out write_record")
     out_file.close()
@@ -408,7 +410,6 @@ def main(opts):
         # process the acustic data now
         for dset_i, (dset_key, dset_val)  in enumerate(cfg_desc.iteritems()):
             print(dset_key)
-            print('-' * 50)
 
             # total dataset
             # zip(gen, nature)
@@ -441,12 +442,15 @@ def main(opts):
                 logging.debug('val data  ({}): {}'.format(len(files_val), files_val))
 
                 # write train, val, test TFRecords
-                train = pool.apply_async(write_record, args=('train', files_train,  result, opts, 'train_data_thread'))
-                #pool.apply_async(write_record, args=('val', files_val, result, opts, 'val_data_thread'))
-                #pool.apply_async(write_record_sep, args=('test', files_test, result, opts, 'test_data_thread'))
+                pool.apply_async(write_record, args=('train', files_train,  result, opts, 'train_data_thread'))
+                pool.apply_async(write_record, args=('val', files_val, result, opts, 'val_data_thread'))
+                pool.apply_async(write_record_sep, args=('test', files_test, result, opts, 'test_data_thread'))
 
-                logging.debug('train result {}'.format(train))
-
+            except KeyboardInterrupt :
+                logging.warning('got Ctrl+C')
+            except Exceptioin as e:
+                logging.info(e)
+                raise e
             finally:
                 # join threads
                 pool.close()
@@ -456,7 +460,6 @@ def main(opts):
 
 
         end_t = timeit.default_timer() - beg_t
-        print('*' * 50)
         print('Total processing and writing time: {} s'.format(end_t))
 
 
