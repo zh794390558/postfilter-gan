@@ -5,3 +5,4 @@ data
 log/
 *.lsf
 tools/demo/
+tags
