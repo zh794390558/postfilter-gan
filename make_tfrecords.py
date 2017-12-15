@@ -194,7 +194,7 @@ def encoder_proc(gen_filename, nature_filename, result, out_file, feature_size=4
 
     # add new axis
     gen_features = gen_features[:, :, np.newaxis]  # feature x frame x channel
-    nature_features = gen_features[:, :, np.newaxis] # feature x frame x channel
+    nature_features = nature_features[:, :, np.newaxis] # feature x frame x channel
     logging.info('features last shape={}'.format(gen_features.shape))
 
     # Example to TFRecords
